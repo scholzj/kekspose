@@ -23,5 +23,5 @@ jobs:
       - name: Upload binary
         uses: actions/upload-artifact@v2
         with:
-          name: "*-runner"
-          path: target/
+          name: kekspose-${{ matrix.os }}
+          path: target/kekspose-*-runner
