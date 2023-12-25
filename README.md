@@ -64,13 +64,13 @@ Alternatively, you can also checkout the project and run it from your IDE or fro
 
 Keksposé supports several parameters that can be used to configure it:
 
-| Option          | Short option | Description                                                                                                                                           | Default Value                                                          |
-|-----------------|:-------------|-------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------|
-| --namespace     | -n           | Namespace of the Kafka cluster. This is also the namespace where the Keksposé proxy will be deployed.                                                 | The default namespace form your Kubernetes configuration will be used. |
-| --cluster-name  | -c           | Name of the Kafka cluster.                                                                                                                            | `myproject`                                                            |
-| --listener-name | -l           | Name of the listener that should be exposed. If not set, Keksposé will try to find a suitable listener on its own.                                    |                                                                        |
-| --starting-port | -p           | The starting port number. This port number will be used for the bootstrap connection and will be used as the basis to calculate the per-broker ports. | `50000`                                                                |
-| --kekspose-name | -k           | Name that will be used for the Keksposé ConfigMap and Pod.                                                                                            | `kekspose`                                                             |
+| Option                   | Description                                                                                                                                                         | Default Value |
+|--------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------|
+| `--namespace` / `-n`     | Namespace of the Kafka cluster. This is also the namespace where the Keksposé proxy will be deployed. Defaults to the namespace form your Kubernetes configuration. |               |
+| `--cluster-name` / `-c`  | Name of the Kafka cluster.                                                                                                                                          | `myproject`   |
+| `--listener-name`/ `-l`  | Name of the listener that should be exposed. If not set, Keksposé will try to find a suitable listener on its own.                                                  |               |
+| `--starting-port` / `-p` | The starting port number. This port number will be used for the bootstrap connection and will be used as the basis to calculate the per-broker ports.               | `50000`       |
+| `--kekspose-name` / `-k` | Name that will be used for the Keksposé ConfigMap and Pod.                                                                                                          | `kekspose`    |
 
 If you are using the Keksposé binary, you can just pass the options form the command line.
 When using the Quarkus Dev mode, you can pass options using the `quakrus.args` system property - e.g. `mvn quarkus:dev -Dquarkus.args="--help"`.  
