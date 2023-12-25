@@ -1,44 +1,54 @@
 package cz.scholz.kekspose;
 
 import io.fabric8.kubernetes.client.KubernetesClient;
-import io.fabric8.kubernetes.client.KubernetesClientBuilder;
+import io.quarkus.runtime.Quarkus;
+import io.quarkus.runtime.ShutdownEvent;
+import jakarta.enterprise.event.Observes;
+import jakarta.inject.Inject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import picocli.CommandLine;
 
-public class Kekspose {
+@CommandLine.Command
+public class Kekspose implements Runnable {
     private static final Logger LOGGER = LoggerFactory.getLogger(Kekspose.class);
 
-    private static final String NAMESPACE = "myproject";
-    private static final String CLUSTER_NAME = "my-cluster";
-    private static final String LISTENER_NAME = "ext2";
+    // This has to be static for the onStop method to work and delete the Kubernetes resources when Keksposé is stopped
+    private static Proxy proxy = null;
+    private static PortForward portForward = null;
 
-    private static final String KEKSPOSE_NAME = "kekspose";
-    private static final Integer STARTING_PORT = 50000;
+    // Command line options
+    @CommandLine.Option(names = {"-n", "--namespace"}, description = "Namespace of the Kafka cluster.")
+    String namespace;
 
-    public static void main(String[] args) {
-        //System.setProperty("org.slf4j.simpleLogger.log.io.fabric8.kubernetes.client.dsl.internal.VersionUsageUtils", "ERROR");
-        ////System.setProperty("org.slf4j.simpleLogger.showLogName", "false");
-        ////System.setProperty("org.slf4j.simpleLogger.showThreadName", "false");
-        //System.setProperty("org.slf4j.simpleLogger.showThreadName", "false");
+    @CommandLine.Option(names = {"-c", "--cluster-name"}, description = "Name of the Kafka cluster.", defaultValue = "my-cluster")
+    String clusterName;
 
-        try (KubernetesClient client = new KubernetesClientBuilder().build()) {
+    @CommandLine.Option(names = {"-l", "--listener-name"}, description = "Name of the listener that should be exposed.")
+    String listenerName;
+
+    @CommandLine.Option(names = {"-p", "--starting-port"}, description = "The starting port number. This port number will be used for the bootstrap connection and will be used as the basis to calculate the per-broker ports.", defaultValue = "50000")
+    Integer startingPort;
+
+    @CommandLine.Option(names = {"-k", "--kekspose-name"}, description = "Name that will be used for the Keksposé ConfigMap and Pod.", defaultValue = "kekspose")
+    String keksposeName;
+
+    // Injected by Quarkus
+    @Inject
+    KubernetesClient client;
+
+    @Override
+    public void run() {
+        try {
+            if (namespace == null) {
+                // We use the default namespace if no namespace was specified
+                namespace = client.getNamespace();
+            }
+
             // Prepare everything
-            Keks keks = KeksBakery.bakeKeks(client, NAMESPACE, CLUSTER_NAME, LISTENER_NAME);
-            Proxy proxy = new Proxy(client, NAMESPACE, KEKSPOSE_NAME, STARTING_PORT, keks);
-            PortForward portForward = new PortForward(client, NAMESPACE, KEKSPOSE_NAME, STARTING_PORT, keks);
-
-            // Register shutdown
-            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-                LOGGER.info("Shutting down");
-
-                LOGGER.info("Stopping the port forwarding");
-                portForward.stop();
-
-                LOGGER.info("Stopping the proxy");
-                proxy.deleteProxy();
-
-                client.close();
-            }));
+            Keks keks = KeksBakery.bakeKeks(client, namespace, clusterName, listenerName);
+            proxy = new Proxy(client, namespace, keksposeName, startingPort, keks);
+            portForward = new PortForward(client, namespace, keksposeName, startingPort, keks);
 
             // Run everything
             LOGGER.info("Starting the proxy");
@@ -47,9 +57,10 @@ public class Kekspose {
             LOGGER.info("Starting the port forwarding");
             portForward.start();
 
-            LOGGER.info("Everything is ready - you can now connect your Kafka client to a bootstrap server {}:{}", "127.0.0.1", STARTING_PORT);
+            LOGGER.info("Everything is ready - you can now connect your Kafka client to a bootstrap server {}:{}", "127.0.0.1", startingPort);
 
-            Thread.currentThread().join();
+            Quarkus.waitForExit();
+
         } catch (Keksception e) {
             // Error was logged already before => we just exit
             System.exit(1);
@@ -57,6 +68,20 @@ public class Kekspose {
             // This was not expected => we log the exception
             LOGGER.error("Something went wrong", t);
             System.exit(1);
+        }
+    }
+
+    void onStop(@Observes ShutdownEvent ev) {
+        LOGGER.info("Shutting down");
+
+        if (portForward != null) {
+            LOGGER.info("Stopping the port forwarding");
+            portForward.stop();
+        }
+
+        if (proxy != null) {
+            LOGGER.info("Stopping the proxy");
+            proxy.deleteProxy();
         }
     }
 }
