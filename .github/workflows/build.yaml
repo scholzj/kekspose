@@ -1,0 +1,27 @@
+name: Build Keksposé
+on: [push]
+jobs:
+  build:
+    name: Build Keksposé on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '17'
+          distribution: 'graalvm-community'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          native-image-job-reports: 'true'
+
+      - name: Build native Quarkus binary
+        run: mvn package -Pnative
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v2
+        with:
+          name: "*-runner"
+          path: target/
