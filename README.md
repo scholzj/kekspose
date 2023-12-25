@@ -1,9 +1,11 @@
 # Keksposé
 
+_**Expose** your **Kafka** cluster outside your Minikube, Kind, or Docker Desktop clusters._
+
 ## What is Keksposé?
 
 [Strimzi](https://strimzi.io) makes it easy to run [Apache Kafka](https://kafka.apache.org/) on Kubernetes.
-But using the Kafka cluster from applications running outside of your Kubernetes cluster can be challenging.
+But using the Kafka cluster from applications running outside of your Kubernetes cluster can be [challenging](https://strimzi.io/blog/2019/04/17/accessing-kafka-part-1/).
 Strimzi tries to make it as easy as possible and supports several different ways how to _expose_ the Kafka cluster:
 * Using Load Balancers
 * Using Node Ports
@@ -25,6 +27,9 @@ Keksposé find a listener without TLS encryption on your Strimzi-based Apache Ka
 It deploys a Kafka proxy based on the [Kroxylicious](https://kroxylicious.io/) project into your Kubernetes cluster and configures it to manage the advertised hosts and ports in the Kafka metadata.
 It also creates a port-forward for each of the Kafka brokers in your cluster.
 Your Kafka clients can then connect to the forwarded ports and through the proxy to the Kafka cluster to send and receive messages. 
+
+Kekspose is written in Java using the [Quarkus framework](https://quarkus.io/).
+That allows it to provide binaries to run Keksposé.
 
 ## How to use Keksposé?
 

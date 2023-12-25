@@ -16,15 +16,37 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
 
+/**
+ * Utility class for collecting information about the Kafka cluster we should expose and creating the Keks class with them
+ */
 public class KeksBakery {
     private static final Logger LOGGER = LoggerFactory.getLogger(KeksBakery.class);
 
+    /**
+     * Creates the Keks record with all the details about the Kafka cluster
+     *
+     * @param client        Kubernetes client
+     * @param namespace     Namespace of the Kafka cluster
+     * @param clusterName   Name of the Kafka cluster
+     * @param listenerName  Name of the listener that should be exposed or null if Keksposé should find a suitable listener on its own
+     *
+     * @return  Returns a Keks record with the details about the Kafka cluster
+     */
     public static Keks bakeKeks(KubernetesClient client, String namespace, String clusterName, String listenerName)    {
         Kafka kafka = findKafka(client, namespace, clusterName);
 
         return new Keks(findBootstrapAddress(clusterName, findListener(kafka, listenerName)), findNodes(client, namespace, clusterName, kafka));
     }
 
+    /**
+     * Finds the Kafka cluster and returns it. Throws an exception if it is not found.
+     *
+     * @param client        Kubernetes client
+     * @param namespace     Namespace of the Kafka cluster
+     * @param clusterName   Name of the Kafka cluster
+     *
+     * @return  The Kafka cluster that should be exposed
+     */
     private static Kafka findKafka(KubernetesClient client, String namespace, String clusterName)   {
         Kafka kafka = Crds.kafkaOperation(client).inNamespace(namespace).withName(clusterName).get();
 
@@ -42,12 +64,27 @@ public class KeksBakery {
         }
     }
 
+    /**
+     * Checks if the Kafka cluster is ready. It does not care about the observed generation.
+     *
+     * @param kafka     The Kafka cluster
+     *
+     * @return  True if it is ready, false otherwise.
+     */
     private static boolean isKafkaReady(Kafka kafka)   {
         return kafka.getStatus() != null
                 && kafka.getStatus().getConditions() != null
                 && kafka.getStatus().getConditions().stream().anyMatch(c -> "Ready".equals(c.getType()) && "True".equals(c.getStatus()));
     }
 
+    /**
+     * Finds a suitable listener. Throws an exception if no suitable listener is found.
+     *
+     * @param kafka         Kafka cluster
+     * @param listenerName  Name of the listener (null if any listener can be used)
+     *
+     * @return  The listener that should be exposed
+     */
     private static GenericKafkaListener findListener(Kafka kafka, String listenerName)  {
         Stream<GenericKafkaListener> listeners = kafka.getSpec().getKafka().getListeners().stream().filter(l -> !l.isTls());
 
@@ -66,6 +103,16 @@ public class KeksBakery {
         });
     }
 
+    /**
+     * Finds the nodes of the Kafka cluster either from the Kafka resource of from the KafkaNodePools
+     *
+     * @param client        Kubernetes client
+     * @param namespace     Namespace of the Kafka cluster
+     * @param clusterName   Name of the Kafka cluster
+     * @param kafka         The Kafka cluster
+     *
+     * @return  Set with the Node IDs used by the Kafka cluster
+     */
     private static Set<Integer> findNodes(KubernetesClient client, String namespace, String clusterName, Kafka kafka) {
         Set<Integer> nodes = new HashSet<>();
 
@@ -90,11 +137,26 @@ public class KeksBakery {
         return nodes;
     }
 
+    /**
+     * Checks if the Kafka cluster uses node pools or not
+     *
+     * @param kafka Kafka cluster
+     *
+     * @return  True if it uses node pools, false otherwise
+     */
     private static boolean usesNodePools(Kafka kafka)  {
         return kafka.getMetadata().getAnnotations() != null
                 && "enabled".equals(kafka.getMetadata().getAnnotations().get("strimzi.io/node-pools"));
     }
 
+    /**
+     * Generates the bootstrap address based on the listener
+     *
+     * @param clusterName   Name of the Kafka cluster
+     * @param listener      Listener that should be used
+     *
+     * @return  The bootstrap address for the Proxy configuration
+     */
     private static String findBootstrapAddress(String clusterName, GenericKafkaListener listener)   {
         String bootstrapAddress;
 

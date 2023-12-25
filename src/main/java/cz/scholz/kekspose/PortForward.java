@@ -9,6 +9,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Creates the port forwards from the Kubernetes cluster
+ */
 public class PortForward {
     private static final Logger LOGGER = LoggerFactory.getLogger(PortForward.class);
 
@@ -20,6 +23,15 @@ public class PortForward {
 
     private final List<LocalPortForward> portForwards = new ArrayList<>();
 
+    /**
+     * Constructor
+     *
+     * @param client        Kubernetes client
+     * @param namespace     Namespace of the Kafka cluster and Keksposé proxy
+     * @param name          Name of the Keksposé proxy Pod
+     * @param initialPort   Initial port number
+     * @param keks          Keks with the Kafka cluster details
+     */
     public PortForward(KubernetesClient client, String namespace, String name, Integer initialPort, Keks keks)    {
         this.client = client;
         this.namespace = namespace;
@@ -28,6 +40,9 @@ public class PortForward {
         this.keks = keks;
     }
 
+    /**
+     * Starts the port-forwarding
+     */
     public void start() {
         // Bootstrap port
         portForwards.add(client.pods().inNamespace(namespace).withName(name).portForward(initialPort, initialPort));
@@ -39,6 +54,9 @@ public class PortForward {
         });
     }
 
+    /**
+     * Stops the port-forwarding
+     */
     public void stop()  {
         for (LocalPortForward port : portForwards)  {
             try {

@@ -19,9 +19,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * The class responsible for configuring and deploying the proxy
+ */
 public class Proxy {
     private static final Logger LOGGER = LoggerFactory.getLogger(Proxy.class);
 
+    // Configuration template for the Kroxylicious proxy
     private static final String CONFIG_TEMPLATE = """
             virtualClusters:
               kekspose:
@@ -42,6 +46,15 @@ public class Proxy {
     private final Integer initialPort;
     private final Keks keks;
 
+    /**
+     * Constructor
+     *
+     * @param client        Kubernetes client
+     * @param namespace     Namespace of the Kafka cluster and Keksposé proxy
+     * @param name          Name of the Keksposé proxy Pod
+     * @param initialPort   Initial port number
+     * @param keks          Keks with the Kafka cluster details
+     */
     public Proxy(KubernetesClient client, String namespace, String name, Integer initialPort, Keks keks)    {
         this.client = client;
         this.namespace = namespace;
@@ -50,6 +63,9 @@ public class Proxy {
         this.keks = keks;
     }
 
+    /**
+     * Deploys the Proxy
+     */
     public void deployProxy()   {
         LOGGER.info("Deploying the proxy");
         client.configMaps().inNamespace(namespace).resource(configMap()).create();
@@ -64,6 +80,9 @@ public class Proxy {
         }
     }
 
+    /**
+     * @return  Generates the configuration ConfigMap
+     */
     private ConfigMap configMap()   {
         return new ConfigMapBuilder()
                 .withNewMetadata()
@@ -75,10 +94,16 @@ public class Proxy {
                 .build();
     }
 
+    /**
+     * @return  Generates the Kroxylicious configuration
+     */
     private String proxyConfig()    {
         return CONFIG_TEMPLATE.formatted(keks.bootstrapAddress(), initialPort, keks.highestNodeId() + 1);
     }
 
+    /**
+     * @return  Generates the Proxy pod
+     */
     private Pod pod()   {
         return new PodBuilder()
                 .withNewMetadata()
@@ -99,6 +124,9 @@ public class Proxy {
                 .build();
     }
 
+    /**
+     * @return  Generates the container ports
+     */
     private List<ContainerPort> containerPorts()    {
         List<ContainerPort> ports = new ArrayList<>();
         ports.add(new ContainerPortBuilder().withContainerPort(initialPort).build());
@@ -106,6 +134,9 @@ public class Proxy {
         return ports;
     }
 
+    /**
+     * Deletes the proxy
+     */
     public void deleteProxy()   {
         client.pods().inNamespace(namespace).withName(name).delete();
         client.configMaps().inNamespace(namespace).withName(name).delete();

@@ -9,6 +9,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import picocli.CommandLine;
 
+/**
+ * The main Keksposé class
+ */
 @CommandLine.Command
 public class Kekspose implements Runnable {
     private static final Logger LOGGER = LoggerFactory.getLogger(Kekspose.class);
@@ -37,6 +40,9 @@ public class Kekspose implements Runnable {
     @Inject
     KubernetesClient client;
 
+    /**
+     * Exposes the Kafka cluster
+     */
     @Override
     public void run() {
         try {
@@ -59,18 +65,23 @@ public class Kekspose implements Runnable {
 
             LOGGER.info("Everything is ready - you can now connect your Kafka client to a bootstrap server {}:{}", "127.0.0.1", startingPort);
 
+            // Wait until we are stopped
             Quarkus.waitForExit();
-
         } catch (Keksception e) {
             // Error was logged already before => we just exit
-            System.exit(1);
+            Quarkus.asyncExit(1);
         } catch (Throwable t) {
             // This was not expected => we log the exception
             LOGGER.error("Something went wrong", t);
-            System.exit(1);
+            Quarkus.asyncExit(1);
         }
     }
 
+    /**
+     * Cleans after Keksposé during the shutdown. This is especially important to delete the Kubernetes resources.
+     *
+     * @param ev    Shutdown event
+     */
     void onStop(@Observes ShutdownEvent ev) {
         LOGGER.info("Shutting down");
 
