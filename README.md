@@ -28,12 +28,52 @@ It deploys a Kafka proxy based on the [Kroxylicious](https://kroxylicious.io/) p
 It also creates a port-forward for each of the Kafka brokers in your cluster.
 Your Kafka clients can then connect to the forwarded ports and through the proxy to the Kafka cluster to send and receive messages. 
 
+```mermaid
+flowchart LR
+    subgraph Local Computer
+        direction TB
+        A[Keksposé]
+        B[Kafka Clients]
+        C[Forwarded Ports]
+    end
+
+    subgraph Kubernetes
+        direction LR
+        D[Kroxylicious Proxy]
+        E[Kafka Cluster]
+    end
+    
+    B <--> |Port-Forwarding| C
+    C <--> |Port-Forwarding| D
+    D <--> |Proxying| E
+    A -. Creates .-> C
+    A -. Deploys .-> D
+```
+
 Kekspose is written in Java using the [Quarkus framework](https://quarkus.io/).
 That allows it to provide binaries to run Keksposé.
 
 ## How to use Keksposé?
 
+### Installation
 
+You can download one of the release binaries from one of the release and use it.
+Alternatively, you can also checkout the project and run it from your IDE or from command line with the `mvn quarkus:dev` command.
+
+### Configuration
+
+Keksposé supports several parameters that can be used to configure it:
+
+| Option          | Short option | Description                                                                                                                                           | Default Value                                                          |
+|-----------------|:-------------|-------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------|
+| --namespace     | -n           | Namespace of the Kafka cluster. This is also the namespace where the Keksposé proxy will be deployed.                                                 | The default namespace form your Kubernetes configuration will be used. |
+| --cluster-name  | -c           | Name of the Kafka cluster.                                                                                                                            | `myproject`                                                            |
+| --listener-name | -l           | Name of the listener that should be exposed. If not set, Keksposé will try to find a suitable listener on its own.                                    |                                                                        |
+| --starting-port | -p           | The starting port number. This port number will be used for the bootstrap connection and will be used as the basis to calculate the per-broker ports. | `50000`                                                                |
+| --kekspose-name | -k           | Name that will be used for the Keksposé ConfigMap and Pod.                                                                                            | `kekspose`                                                             |
+
+If you are using the Keksposé binary, you can just pass the options form the command line.
+When using the Quarkus Dev mode, you can pass options using the `quakrus.args` system property - e.g. `mvn quarkus:dev -Dquarkus.args="--help"`.  
 
 ## Frequently Asked Questions
 
@@ -62,3 +102,7 @@ Running Keksposé requires the following RBAC rights:
 
 Keksposé was designed with focus on local Kubernetes environment such as Minikube, Kind, or Docker Desktop.
 But it can be used with any Kubernetes cluster
+
+## Building
+
+You can build the native binary after installing the GraalVM and running `mvn package -Pnative`.
