@@ -52,7 +52,10 @@ public class Proxy {
 
     public void deployProxy()   {
         LOGGER.info("Deploying the proxy");
+
+        LOGGER.info("Creating the CM: {}", configMap());
         client.configMaps().inNamespace(namespace).resource(configMap()).create();
+        LOGGER.info("Creating the Pod: {}", pod());
         client.pods().inNamespace(namespace).resource(pod()).create();
 
         try {

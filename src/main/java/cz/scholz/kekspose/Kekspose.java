@@ -10,24 +10,21 @@ public class Kekspose {
 
     private static final String NAMESPACE = "myproject";
     private static final String CLUSTER_NAME = "my-cluster";
-    private static final String LISTENER_NAME = "ext2";
+    private static final String LISTENER_NAME = null;
 
     private static final String KEKSPOSE_NAME = "kekspose";
     private static final Integer STARTING_PORT = 50000;
 
     public static void main(String[] args) {
-        //System.setProperty("org.slf4j.simpleLogger.log.io.fabric8.kubernetes.client.dsl.internal.VersionUsageUtils", "ERROR");
-        ////System.setProperty("org.slf4j.simpleLogger.showLogName", "false");
-        ////System.setProperty("org.slf4j.simpleLogger.showThreadName", "false");
-        //System.setProperty("org.slf4j.simpleLogger.showThreadName", "false");
-
-        try (KubernetesClient client = new KubernetesClientBuilder().build()) {
+        //try (KubernetesClient client = new KubernetesClientBuilder().build()) {
+        try {
             // Prepare everything
+            KubernetesClient client = new KubernetesClientBuilder().build();
             Keks keks = KeksBakery.bakeKeks(client, NAMESPACE, CLUSTER_NAME, LISTENER_NAME);
             Proxy proxy = new Proxy(client, NAMESPACE, KEKSPOSE_NAME, STARTING_PORT, keks);
             PortForward portForward = new PortForward(client, NAMESPACE, KEKSPOSE_NAME, STARTING_PORT, keks);
 
-            // Register shutdown
+            // Register shutdown hook to delete the proxy pod and terminate the port-forwards
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                 LOGGER.info("Shutting down");
 
