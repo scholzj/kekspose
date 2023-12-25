@@ -3,7 +3,7 @@
 ## What is Keksposé?
 
 [Strimzi](https://strimzi.io) makes it easy to run [Apache Kafka](https://kafka.apache.org/) on Kubernetes.
-But using the Kafka cluster from applications running outside of your Kubernetes cluster can be challenging.
+But using the Kafka cluster from applications running outside of your Kubernetes cluster can be [challenging](https://strimzi.io/blog/2019/04/17/accessing-kafka-part-1/).
 Strimzi tries to make it as easy as possible and supports several different ways how to _expose_ the Kafka cluster:
 * Using Load Balancers
 * Using Node Ports
