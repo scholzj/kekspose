@@ -44,6 +44,7 @@ public class Proxy {
     private final String namespace;
     private final String name;
     private final Integer initialPort;
+    private final Integer timeoutMs;
     private final Keks keks;
 
     /**
@@ -53,13 +54,15 @@ public class Proxy {
      * @param namespace     Namespace of the Kafka cluster and Keksposé proxy
      * @param name          Name of the Keksposé proxy Pod
      * @param initialPort   Initial port number
+     * @param timeoutMs     Timeout in milliseconds for how long we should wait for the Proxy pod readiness
      * @param keks          Keks with the Kafka cluster details
      */
-    public Proxy(KubernetesClient client, String namespace, String name, Integer initialPort, Keks keks)    {
+    public Proxy(KubernetesClient client, String namespace, String name, Integer initialPort, Integer timeoutMs, Keks keks)    {
         this.client = client;
         this.namespace = namespace;
         this.name = name;
         this.initialPort = initialPort;
+        this.timeoutMs = timeoutMs;
         this.keks = keks;
     }
 
@@ -73,7 +76,7 @@ public class Proxy {
 
         try {
             LOGGER.info("Waiting for the proxy to become ready");
-            client.pods().inNamespace(namespace).withName(name).waitUntilReady(1, TimeUnit.MINUTES);
+            client.pods().inNamespace(namespace).withName(name).waitUntilReady(timeoutMs, TimeUnit.MILLISECONDS);
         } catch (KubernetesClientTimeoutException e)    {
             LOGGER.error("The Proxy Pod did not become ready");
             throw new Keksception("The Proxy Pod did not become ready");

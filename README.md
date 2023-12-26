@@ -71,6 +71,7 @@ Keksposé supports several parameters that can be used to configure it:
 | `--listener-name`/ `-l`  | Name of the listener that should be exposed. If not set, Keksposé will try to find a suitable listener on its own.                                                  |               |
 | `--starting-port` / `-p` | The starting port number. This port number will be used for the bootstrap connection and will be used as the basis to calculate the per-broker ports.               | `50000`       |
 | `--kekspose-name` / `-k` | Name that will be used for the Keksposé ConfigMap and Pod.                                                                                                          | `kekspose`    |
+| `--timeout` / `-t`       | Timeout for how long to wait for the Proxy Pod to become ready. In milliseconds.                                                                                    | `300000`      |
 
 If you are using the Keksposé binary, you can just pass the options form the command line.
 When using the Quarkus Dev mode, you can pass options using the `quakrus.args` system property - e.g. `mvn quarkus:dev -Dquarkus.args="--help"`.  

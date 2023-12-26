@@ -36,6 +36,9 @@ public class Kekspose implements Runnable {
     @CommandLine.Option(names = {"-k", "--kekspose-name"}, description = "Name that will be used for the Keksposé ConfigMap and Pod.", defaultValue = "kekspose")
     String keksposeName;
 
+    @CommandLine.Option(names = {"-t", "--timeout"}, description = "Timeout for how long to wait for the Proxy Pod to become ready. In milliseconds.", defaultValue = "300000")
+    Integer timeout;
+
     // Injected by Quarkus
     @Inject
     KubernetesClient client;
