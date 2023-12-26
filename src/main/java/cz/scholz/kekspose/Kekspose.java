@@ -56,7 +56,7 @@ public class Kekspose implements Runnable {
 
             // Prepare everything
             Keks keks = KeksBakery.bakeKeks(client, namespace, clusterName, listenerName);
-            proxy = new Proxy(client, namespace, keksposeName, startingPort, keks);
+            proxy = new Proxy(client, namespace, keksposeName, startingPort, timeout, keks);
             portForward = new PortForward(client, namespace, keksposeName, startingPort, keks);
 
             // Run everything
