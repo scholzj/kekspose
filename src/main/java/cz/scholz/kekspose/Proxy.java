@@ -10,6 +10,7 @@ import io.fabric8.kubernetes.api.model.PodBuilder;
 import io.fabric8.kubernetes.api.model.VolumeBuilder;
 import io.fabric8.kubernetes.api.model.VolumeMountBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
+import io.fabric8.kubernetes.client.KubernetesClientException;
 import io.fabric8.kubernetes.client.KubernetesClientTimeoutException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,8 +72,16 @@ public class Proxy {
      */
     public void deployProxy()   {
         LOGGER.info("Deploying the proxy");
-        client.configMaps().inNamespace(namespace).resource(configMap()).create();
-        client.pods().inNamespace(namespace).resource(pod()).create();
+
+        try {
+            client.configMaps().inNamespace(namespace).resource(configMap()).create();
+            client.pods().inNamespace(namespace).resource(pod()).create();
+        } catch (KubernetesClientException e)   {
+            if (e.getCode() == 409) {
+                LOGGER.error("The Proxy Pod or ConfigMap seem to already exist.");
+                throw new Keksception("The Proxy Pod or ConfigMap seem to already exist");
+            }
+        }
 
         try {
             LOGGER.info("Waiting for the proxy to become ready");
