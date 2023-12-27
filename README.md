@@ -1,6 +1,8 @@
 # Keksposé
 
-_**Expose** your **Kafka** cluster outside your Minikube, Kind, or Docker Desktop clusters._
+_**Expose** your **Kafka** cluster outside your Minikube, Kind, or Docker Desktop Kubernetes clusters._
+
+[![Keksposé: Expose your Kafka outside your Minikube, Kind, or Docker Desktop Kubernetes clusters](http://img.youtube.com/vi/EOpWH9gfKmU/0.jpg)](http://www.youtube.com/watch?v=EOpWH9gfKmU "Keksposé: Expose your Kafka outside your Minikube, Kind, or Docker Desktop Kubernetes clusters")
 
 ## What is Keksposé?
 
@@ -17,15 +19,18 @@ But when using a local Kubernetes cluster such as Minikube, Kind or Docker Deskt
 * They often run inside additional virtual machines or containers and use complex networking so that node ports do not work out of the box
 * While Ingress usually works, the installation of the right Ingress controller and its configuration is often complicated 
 
-One of the way how applications are often exposed from local clusters is port-forwarding.
-But using port-forward with Apache Kafka is not so simple because of its custom discovery protocol.
-Keksposé makes it possible to use port-forward with Apache Kafka with the help of [Kroxylicious](https://kroxylicious.io/). 
+One of the ways how applications are often exposed from local clusters is using port forwarding with `kubectl port-foward`.
+But using port forwarding with Apache Kafka is not so simple because of its custom discovery protocol.
+You need to forward ports for each brokers in the Kafka cluster.
+And you need to make sure your advertised hosts and ports are correctly configured to the local address.
+Keksposé makes it possible to use port forwarding with Apache Kafka with the help of [Kroxylicious](https://kroxylicious.io/) project that provides Kafka proxying capabilities. 
 
 ## How does it work?
 
-Keksposé find a listener without TLS encryption on your Strimzi-based Apache Kafka clusters and exposes it.
+Keksposé finds a listener without TLS encryption on your Strimzi-based Apache Kafka clusters and exposes it.
 It deploys a Kafka proxy based on the [Kroxylicious](https://kroxylicious.io/) project into your Kubernetes cluster and configures it to manage the advertised hosts and ports in the Kafka metadata.
 It also creates a port-forward for each of the Kafka brokers in your cluster.
+The advertised hosts and ports are changed by the Kroxylicious proxy to the local addresses of the forwarded ports.
 Your Kafka clients can then connect to the forwarded ports and through the proxy to the Kafka cluster to send and receive messages. 
 
 ```mermaid
@@ -51,7 +56,7 @@ flowchart LR
 ```
 
 Kekspose is written in Java using the [Quarkus framework](https://quarkus.io/).
-That allows it to provide binaries to run Keksposé.
+That allows it to provide native binaries to make it easier to run Keksposé.
 
 ## How to use Keksposé?
 
@@ -92,17 +97,27 @@ You might need to restart Keksposé after scaling up your Kafka cluster or chang
 Keksposé supports Kraft-based Apache Kafka cluster.
 However, it exposes the broker nodes only.
 
-### What RBAC rights do I need to run Keksposé?
+### What access rights do I need to run Keksposé?
 
-Running Keksposé requires the following RBAC rights:
-* Reading the Kafka and KafkaNodePool Strimzi resources
-* Creating and deleting a Pod with the Kroxylicious proxy and a ConfigMap with configuration
-* Needs to be able to port-forward ports from the proxy Pod
+Running Keksposé requires the following access rights to your Kubernetes cluster:
+* Reading the Kafka and KafkaNodePool Strimzi resources from the selected namespace
+* Creating and deleting a Pod with the Kroxylicious proxy and a ConfigMap with configuration in the same namespace as the Kafka cluster runs
+* Needs to be able to forward ports from the proxy Pod
 
 ### Does Keksposé work only with local Kubernetes clusters?
 
-Keksposé was designed with focus on local Kubernetes environment such as Minikube, Kind, or Docker Desktop.
-But it can be used with any Kubernetes cluster
+Keksposé was designed with focus on local Kubernetes environments such as Minikube, Kind, or Docker Desktop.
+But it can be used with any Kubernetes cluster regardless of how and where you run it.
+
+### Can the same Kafka cluster be exposed to multiple users in parallel?
+
+Any user that has access to the Kubernetes cluster and the necessary rights can expose it.
+But in order to be able to expose the Kafka cluster, Keksposé has to deploy the proxy into the Kubernetes cluster.
+So if the same cluster should be exposed in parallel to multiple users, it is important that they each use their own value for the `--kekspose-name` option to make sure each user has a custom proxy instance. 
+
+### What does the name Keksposé mean?
+
+It is a combination of several words: `Kafka`, `Expose` ... and `Keks` (biscuit) because everyone likes them 😉.
 
 ## Building
 
