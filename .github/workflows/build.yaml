@@ -6,8 +6,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        # macos-latest-large => Intel, macos-latest-xlarge => arm
-        os: [macos-latest-large, macos-latest-xlarge, windows-latest, ubuntu-latest]
+        os: [macos-latest, windows-latest, ubuntu-latest]
     steps:
       - uses: actions/checkout@v4
 
