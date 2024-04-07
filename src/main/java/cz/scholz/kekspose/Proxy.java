@@ -46,6 +46,7 @@ public class Proxy {
     private final String name;
     private final Integer initialPort;
     private final Integer timeoutMs;
+    private final String proxyImage;
     private final Keks keks;
 
     /**
@@ -56,14 +57,16 @@ public class Proxy {
      * @param name          Name of the Keksposé proxy Pod
      * @param initialPort   Initial port number
      * @param timeoutMs     Timeout in milliseconds for how long we should wait for the Proxy pod readiness
+     * @param proxyImage    Container image that will be used for the proxy
      * @param keks          Keks with the Kafka cluster details
      */
-    public Proxy(KubernetesClient client, String namespace, String name, Integer initialPort, Integer timeoutMs, Keks keks)    {
+    public Proxy(KubernetesClient client, String namespace, String name, Integer initialPort, Integer timeoutMs, String proxyImage, Keks keks)    {
         this.client = client;
         this.namespace = namespace;
         this.name = name;
         this.initialPort = initialPort;
         this.timeoutMs = timeoutMs;
+        this.proxyImage = proxyImage;
         this.keks = keks;
     }
 
@@ -80,6 +83,9 @@ public class Proxy {
             if (e.getCode() == 409) {
                 LOGGER.error("The Proxy Pod or ConfigMap seem to already exist.");
                 throw new Keksception("The Proxy Pod or ConfigMap seem to already exist");
+            } else {
+                LOGGER.error("Unexpected exception when creating the proxy", e);
+                throw new Keksception("Unexpected exception when creating the proxy", e);
             }
         }
 
@@ -126,12 +132,13 @@ public class Proxy {
                 .withNewSpec()
                     .withContainers(new ContainerBuilder()
                             .withName("kroxylicious")
-                            .withImage("quay.io/kroxylicious/kroxylicious:0.5.0")
+                            .withImage(proxyImage)
                             .withArgs("--config", "/etc/kekspose/proxy-config.yaml")
                             .withPorts(containerPorts())
                             .withVolumeMounts(new VolumeMountBuilder().withName("proxy-config").withMountPath("/etc/kekspose/proxy-config.yaml").withSubPath("proxy-config.yaml").build())
                             .build())
                     .withVolumes(new VolumeBuilder().withName("proxy-config").withNewConfigMap().withName(name).endConfigMap().build())
+                    .withOverhead(null)
                 .endSpec()
                 .build();
     }
