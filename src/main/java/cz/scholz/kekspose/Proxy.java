@@ -126,7 +126,7 @@ public class Proxy {
                 .withNewSpec()
                     .withContainers(new ContainerBuilder()
                             .withName("kroxylicious")
-                            .withImage("quay.io/kroxylicious/kroxylicious-developer:0.4.0")
+                            .withImage("quay.io/kroxylicious/kroxylicious:0.5.0")
                             .withArgs("--config", "/etc/kekspose/proxy-config.yaml")
                             .withPorts(containerPorts())
                             .withVolumeMounts(new VolumeMountBuilder().withName("proxy-config").withMountPath("/etc/kekspose/proxy-config.yaml").withSubPath("proxy-config.yaml").build())

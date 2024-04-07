@@ -18,10 +18,10 @@
         <surefire-plugin.version>3.1.2</surefire-plugin.version>
 
         <!-- Quarkus versions -->
-        <quarkus.platform.version>3.6.4</quarkus.platform.version>
+        <quarkus.platform.version>3.9.2</quarkus.platform.version>
 
         <!-- Other dependencies -->
-        <strimzi-api.version>0.39.0</strimzi-api.version>
+        <strimzi-api.version>0.40.0</strimzi-api.version>
     </properties>
 
     <dependencyManagement>
