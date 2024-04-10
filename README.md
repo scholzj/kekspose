@@ -120,6 +120,15 @@ So if the same cluster should be exposed in parallel to multiple users, it is im
 
 It is a combination of several words: `Kafka`, `Expose` ... and `Keks` (biscuit) because everyone likes them 😉.
 
+### I get some SSL errors from the Kubernetes client when running Keksposé
+
+You should try to use the environment variable `QUARKUS_KUBERNETES_CLIENT_TRUST_CERTS` and set it to true to disable checking of the TLS certificates of the Kubernetes API server.
+For example:
+
+```
+QUARKUS_KUBERNETES_CLIENT_TRUST_CERTS=true ./kekspose
+```
+
 ## Building
 
 You can build the native binary after installing the GraalVM and running `mvn package -Pnative`.
