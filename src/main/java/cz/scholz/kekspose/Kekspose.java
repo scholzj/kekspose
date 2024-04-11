@@ -39,7 +39,7 @@ public class Kekspose implements Runnable {
     @CommandLine.Option(names = {"-t", "--timeout"}, description = "Timeout for how long to wait for the Proxy Pod to become ready. In milliseconds.", defaultValue = "300000")
     Integer timeout;
 
-    @CommandLine.Option(names = {"-i", "--proxy-image"}, description = "Container image used for the proxy (must be based on a compatible Kroxylicious container image).", defaultValue = "quay.io/kroxylicious/kroxylicious:0.5.0")
+    @CommandLine.Option(names = {"-i", "--proxy-image"}, description = "Container image used for the proxy (must be based on a compatible Kroxylicious container image).", defaultValue = "quay.io/kroxylicious/kroxylicious:0.5.1")
     String proxyImage;
 
     // Injected by Quarkus
