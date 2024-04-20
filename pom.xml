@@ -6,7 +6,7 @@
 
     <groupId>cz.scholz</groupId>
     <artifactId>kekspose</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>0.2.0</version>
 
     <properties>
         <maven.compiler.release>17</maven.compiler.release>
