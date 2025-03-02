@@ -16,8 +16,6 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.24.x'
-      - name: Print Tag
-        run: echo ${{github.ref_name}}
       - name: Build
         env:
           PLATFORMS: "darwin/arm64 darwin/amd64 linux/386 linux/amd64 linux/arm64 windows/amd64 windows/arm64 windows/386"
@@ -25,13 +23,12 @@ jobs:
         run: |
           for PLATFORM in ${PLATFORMS}
           do
-              echo "Building platform ${PLATFORM}"
               PLATFORM_SPLIT=(${PLATFORM//\// })
               GOOS=${PLATFORM_SPLIT[0]}
               GOARCH=${PLATFORM_SPLIT[1]}
               OUTPUT_NAME=kekspose'-'$VERSION'-'$GOOS'-'$GOARCH
               
-              echo "Output name will be ${OUTPUT_NAME}"
+              echo "Building platform ${PLATFORM} as ${OUTPUT_NAME}"
               
               if [ $GOOS = "windows" ]; then
                   OUTPUT_NAME+='.exe'
