@@ -1,26 +1,51 @@
 name: Build Keksposé
-on: [push]
+on:
+  push:
+    branches:
+      - 'master'
+  pr:
+  tags:
+    - '*' # Push events to matching v*, i.e. v1.0, v20.15.10
+
 jobs:
   build:
-    name: Build Keksposé on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
-
-      - uses: graalvm/setup-graalvm@v1
+      - name: Setup Go
+        uses: actions/setup-go@v5
         with:
-          java-version: '21'
-          distribution: 'graalvm-community'
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build native Quarkus binary
-        run: mvn package -Pnative
-
+          go-version: '1.24.x'
+      - name: Print Tag
+        run: echo ${{github.ref_name}}
+      - name: Install dependencies
+        run: go get .
+      - name: Build
+        #run: go build -v
+        env:
+          PLATFORMS: ("darwin/arm64" "darwin/amd64" "linux/386" "linux/amd64" "linux/arm64" "windows/amd64" "windows/arm64" "windows/386")
+        run: |
+          for PLATFORM in "${platforms[@]}"
+          do
+              PLATFORM_SPLIT=(${PLATFORM//\// })
+              GOOS=${PLATFORM_SPLIT[0]}
+              GOARCH=${PLATFORM_SPLIT[1]}
+              OUTPUT_NAME=kekspose'-'$GOOS'-'$GOARCH
+              if [ $GOOS = "windows" ]; then
+                  OUTPUT_NAME+='.exe'
+              fi
+          
+              env GOOS=$GOOS GOARCH=$GOARCH go build -v -o OUTPUT_NAME
+              if [ $? -ne 0 ]; then
+                  echo 'An error has occurred! Aborting the script execution...'
+                  exit 1
+              fi
+          done
+#      - name: Test with the Go CLI
+#        run: go test
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
-          name: kekspose-${{ matrix.os }}
-          path: target/kekspose-*-runner*
+          name: kekspose
+          path: kekspose-*
