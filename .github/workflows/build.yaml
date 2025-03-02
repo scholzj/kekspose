@@ -20,7 +20,7 @@ jobs:
       - name: Print Tag
         run: echo ${{github.ref_name}}
       - name: Install dependencies
-        run: go get .
+        run: go get -v .
       - name: Build
         #run: go build -v
         env:
@@ -40,7 +40,7 @@ jobs:
                   OUTPUT_NAME+='.exe'
               fi
           
-              env GOOS=$GOOS GOARCH=$GOARCH go build -v -o $OUTPUT_NAME
+              env GOOS=$GOOS GOARCH=$GOARCH go build -o $OUTPUT_NAME
               if [ $? -ne 0 ]; then
                   echo 'An error has occurred! Aborting the script execution...'
                   exit 1
@@ -53,3 +53,5 @@ jobs:
         with:
           name: kekspose
           path: kekspose-*
+        on:
+          push:
