@@ -55,7 +55,7 @@ flowchart LR
     A -. Deploys .-> D
 ```
 
-Kekspose is written in Java using the [Quarkus framework](https://quarkus.io/).
+Kekspose is written in Golang using the [Strimzi Go APIs](https://github.com/scholzj/strimzi-go).
 That allows it to provide native binaries to make it easier to run Keksposé.
 
 ## How to use Keksposé?
@@ -63,24 +63,24 @@ That allows it to provide native binaries to make it easier to run Keksposé.
 ### Installation
 
 You can download one of the release binaries from one of the release and use it.
-Alternatively, you can also checkout the project and run it from your IDE or from command line with the `mvn quarkus:dev` command.
 
 ### Configuration
 
 Keksposé supports several parameters that can be used to configure it:
 
-| Option                   | Description                                                                                                                                                         | Default Value                             |
-|--------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------|
-| `--namespace` / `-n`     | Namespace of the Kafka cluster. This is also the namespace where the Keksposé proxy will be deployed. Defaults to the namespace form your Kubernetes configuration. |                                           |
-| `--cluster-name` / `-c`  | Name of the Kafka cluster.                                                                                                                                          | `myproject`                               |
-| `--listener-name`/ `-l`  | Name of the listener that should be exposed. If not set, Keksposé will try to find a suitable listener on its own.                                                  |                                           |
-| `--starting-port` / `-p` | The starting port number. This port number will be used for the bootstrap connection and will be used as the basis to calculate the per-broker ports.               | `50000`                                   |
-| `--kekspose-name` / `-k` | Name that will be used for the Keksposé ConfigMap and Pod.                                                                                                          | `kekspose`                                |
-| `--timeout` / `-t`       | Timeout for how long to wait for the Proxy Pod to become ready. In milliseconds.                                                                                    | `300000`                                  |
-| `--proxy-image` / `-i`   | Container image used for the proxy (must be based on a compatible Kroxylicious container image)                                                                     | `quay.io/kroxylicious/kroxylicious:0.5.0` |
+| Option                   | Description                                                                                                                                                         | Default Value                                  |
+|--------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------|
+| `--help` / `-h`          | Help                                                                                                                                                                |                                                |
+| `--kubeconfig`           | Path to the kubeconfig file to use for Kubernetes API requests.                                                                                                     |                                                |
+| `--namespace` / `-n`     | Namespace of the Kafka cluster. This is also the namespace where the Keksposé proxy will be deployed. Defaults to the namespace form your Kubernetes configuration. |                                                |
+| `--cluster-name` / `-c`  | Name of the Kafka cluster.                                                                                                                                          | `my-cluster`                                   |
+| `--listener-name`/ `-l`  | Name of the listener that should be exposed. If not set, Keksposé will try to find a suitable listener on its own.                                                  |                                                |
+| `--starting-port` / `-p` | The starting port number. This port number will be used for the bootstrap connection and will be used as the basis to calculate the per-broker ports.               | `50000`                                        |
+| `--kekspose-name` / `-k` | Name that will be used for the Keksposé ConfigMap and Pod.                                                                                                          | `kekspose`                                     |
+| `--timeout` / `-t`       | Timeout for how long to wait for the Proxy Pod to become ready. In milliseconds.                                                                                    | `300000`                                       |
+| `--proxy-image` / `-i`   | Container image used for the proxy (must be based on a compatible Kroxylicious container image)                                                                     | `ghcr.io/scholzj/kekspose:kroxylicious-0.10.0` |
 
 If you are using the Keksposé binary, you can just pass the options form the command line.
-When using the Quarkus Dev mode, you can pass options using the `quakrus.args` system property - e.g. `mvn quarkus:dev -Dquarkus.args="--help"`.  
 
 ## Frequently Asked Questions
 
@@ -119,16 +119,3 @@ So if the same cluster should be exposed in parallel to multiple users, it is im
 ### What does the name Keksposé mean?
 
 It is a combination of several words: `Kafka`, `Expose` ... and `Keks` (biscuit) because everyone likes them 😉.
-
-### I get some SSL errors from the Kubernetes client when running Keksposé
-
-You should try to use the environment variable `QUARKUS_KUBERNETES_CLIENT_TRUST_CERTS` and set it to true to disable checking of the TLS certificates of the Kubernetes API server.
-For example:
-
-```
-QUARKUS_KUBERNETES_CLIENT_TRUST_CERTS=true ./kekspose
-```
-
-## Building
-
-You can build the native binary after installing the GraalVM and running `mvn package -Pnative`.
