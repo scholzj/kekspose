@@ -4,8 +4,7 @@ on:
     branches:
       - 'main'
     tags:
-      - '*' # Push events to matching v*, i.e. v1.0, v20.15.10
-  pull_request:
+      - '*'
 
 jobs:
   build:
@@ -19,12 +18,10 @@ jobs:
           go-version: '1.24.x'
       - name: Print Tag
         run: echo ${{github.ref_name}}
-      - name: Install dependencies
-        run: go get .
       - name: Build
-        #run: go build -v
         env:
           PLATFORMS: "darwin/arm64 darwin/amd64 linux/386 linux/amd64 linux/arm64 windows/amd64 windows/arm64 windows/386"
+          VERSION: ${{github.ref_name}}
         run: |
           for PLATFORM in ${PLATFORMS}
           do
@@ -32,7 +29,7 @@ jobs:
               PLATFORM_SPLIT=(${PLATFORM//\// })
               GOOS=${PLATFORM_SPLIT[0]}
               GOARCH=${PLATFORM_SPLIT[1]}
-              OUTPUT_NAME=kekspose'-'$GOOS'-'$GOARCH
+              OUTPUT_NAME=kekspose'-'$VERSION'-'$GOOS'-'$GOARCH
               
               echo "Output name will be ${OUTPUT_NAME}"
               
@@ -40,14 +37,12 @@ jobs:
                   OUTPUT_NAME+='.exe'
               fi
           
-              env GOOS=$GOOS GOARCH=$GOARCH go build -v -o $OUTPUT_NAME
+              env GOOS=$GOOS GOARCH=$GOARCH go build -o $OUTPUT_NAME
               if [ $? -ne 0 ]; then
                   echo 'An error has occurred! Aborting the script execution...'
                   exit 1
               fi
           done
-#      - name: Test with the Go CLI
-#        run: go test
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
