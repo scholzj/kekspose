@@ -53,5 +53,3 @@ jobs:
         with:
           name: kekspose
           path: kekspose-*
-        on:
-          push:
