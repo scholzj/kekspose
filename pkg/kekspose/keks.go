@@ -44,7 +44,7 @@ func (k *Keks) highestNodeId() int32 {
 	return highestNodeId
 }
 
-func bakeKeks(client *strimziclient.Clientset, namespace string, clusterName string, listenerName string) (*Keks, error) {
+func bakeKeks(client strimziclient.Interface, namespace string, clusterName string, listenerName string) (*Keks, error) {
 	kafka, err := findKafka(client, namespace, clusterName)
 	if err != nil {
 		return nil, err
@@ -68,7 +68,7 @@ func bakeKeks(client *strimziclient.Clientset, namespace string, clusterName str
 	return keks, nil
 }
 
-func findKafka(client *strimziclient.Clientset, namespace string, clusterName string) (*strimziapi.Kafka, error) {
+func findKafka(client strimziclient.Interface, namespace string, clusterName string) (*strimziapi.Kafka, error) {
 	kafka, err := client.KafkaV1beta2().Kafkas(namespace).Get(context.TODO(), clusterName, v1.GetOptions{})
 	if err != nil {
 		if !strings.Contains(err.Error(), "not found") {
@@ -166,7 +166,7 @@ func findListenerByName(kafka *strimziapi.Kafka, listenerName string) (*strimzia
 	return nil, fmt.Errorf("Kafka listener with name %s was not found", listenerName)
 }
 
-func findNodes(client *strimziclient.Clientset, kafka *strimziapi.Kafka) ([]int32, error) {
+func findNodes(client strimziclient.Interface, kafka *strimziapi.Kafka) ([]int32, error) {
 	if len(kafka.Annotations) > 0 && kafka.Annotations["strimzi.io/node-pools"] == "enabled" {
 		log.Printf("Node Pools are enabled -> getting node IDs from their status")
 		var nodeIds []int32
