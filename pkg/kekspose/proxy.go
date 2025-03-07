@@ -29,7 +29,7 @@ import (
 )
 
 type Proxy struct {
-	Client       *kubernetes.Clientset
+	Client       kubernetes.Interface
 	Namespace    string
 	KeksposeName string
 	ProxyImage   string
