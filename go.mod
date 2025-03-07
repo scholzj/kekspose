@@ -3,9 +3,9 @@ module github.com/scholzj/kekspose
 go 1.23.5
 
 require (
-	github.com/scholzj/strimzi-go v0.1.0
+	github.com/scholzj/strimzi-go v0.2.0
 	github.com/spf13/cobra v1.9.1
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.10.0
 	k8s.io/api v0.32.2
 	k8s.io/apimachinery v0.32.2
 	k8s.io/client-go v0.32.2
