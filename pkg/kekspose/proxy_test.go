@@ -32,14 +32,17 @@ func TestProxyConfigMap(t *testing.T) {
 	cm, err := client.CoreV1().ConfigMaps("my-namespace").Get(context.TODO(), "my-kekspose", metav1.GetOptions{})
 	assert.Nil(t, err)
 	assert.Equal(t, cm.Data["proxy-config.yaml"], `virtualClusters:
-              kekspose:
+              - name: kekspose
                 targetCluster:
-                  bootstrap_servers: my-bootstrap-address:9092
-                clusterNetworkAddressConfigProvider:
-                  type: PortPerBrokerClusterNetworkAddressConfigProvider
-                  config:
-                    bootstrapAddress: 127.0.0.1:10000
-                    numberOfBrokerPorts: 1001
+                  bootstrapServers: my-bootstrap-address:9092
+                gateways:
+                  - name: kekspose-gateway
+                    portIdentifiesNode:
+                      bootstrapAddress: 127.0.0.1:10000
+                      nodeIdRanges:
+                        - name: brokers
+                          start: 0
+                          end: 1000
                 logNetwork: false
                 logFrames: false`)
 

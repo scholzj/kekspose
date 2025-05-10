@@ -40,19 +40,22 @@ type Proxy struct {
 
 func (p *Proxy) createConfigMap() error {
 	config := fmt.Sprintf(`virtualClusters:
-              kekspose:
+              - name: kekspose
                 targetCluster:
-                  bootstrap_servers: %s
-                clusterNetworkAddressConfigProvider:
-                  type: PortPerBrokerClusterNetworkAddressConfigProvider
-                  config:
-                    bootstrapAddress: 127.0.0.1:%d
-                    numberOfBrokerPorts: %d
+                  bootstrapServers: %s
+                gateways:
+                  - name: kekspose-gateway
+                    portIdentifiesNode:
+                      bootstrapAddress: 127.0.0.1:%d
+                      nodeIdRanges:
+                        - name: brokers
+                          start: 0
+                          end: %d
                 logNetwork: false
                 logFrames: false`,
 		p.Keks.BootstrapAddress,
 		p.StartingPort,
-		p.Keks.highestNodeId()+1)
+		p.Keks.highestNodeId())
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      p.KeksposeName,
