@@ -42,7 +42,10 @@ type Kekspose struct {
 func (k *Kekspose) ExposeKafka() {
 	// Prepare Kubernetes client configuration
 	if k.KubeConfigPath == "" {
-		if home := homedir.HomeDir(); home != "" {
+		if os.Getenv("KUBECONFIG") != "" {
+			k.KubeConfigPath = os.Getenv("KUBECONFIG")
+			log.Printf("Using kubeconfig %s", k.KubeConfigPath)
+		} else if home := homedir.HomeDir(); home != "" {
 			k.KubeConfigPath = filepath.Join(home, ".kube", "config")
 			log.Printf("Using kubeconfig %s", k.KubeConfigPath)
 		}
@@ -100,7 +103,7 @@ func (k *Kekspose) ExposeKafka() {
 	}
 
 	log.Printf("Deploying Keksposé proxy")
-	
+
 	err = proxy.createConfigMap()
 	if err != nil {
 		log.Fatalf("Failed to create the Proxy ConfigMap: %v", err)
