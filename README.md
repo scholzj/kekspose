@@ -80,7 +80,7 @@ Keksposé supports several parameters that can be used to configure it:
 | `--timeout` / `-t`       | Timeout for how long to wait for the Proxy Pod to become ready. In milliseconds.                                                                                    | `300000`                                       |
 | `--proxy-image` / `-i`   | Container image used for the proxy (must be based on a compatible Kroxylicious container image)                                                                     | `ghcr.io/scholzj/kekspose:kroxylicious-0.13.0` |
 
-If you are using the Keksposé binary, you can just pass the options form the command line.
+If you are using the Keksposé binary, you can just pass the options from the command line.
 
 ## Frequently Asked Questions
 
