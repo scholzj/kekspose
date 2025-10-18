@@ -7,23 +7,23 @@ _**Expose** your **Kafka** cluster outside your Minikube, Kind, or Docker Deskto
 ## What is Keksposé?
 
 [Strimzi](https://strimzi.io) makes it easy to run [Apache Kafka](https://kafka.apache.org/) on Kubernetes.
-But using the Kafka cluster from applications running outside of your Kubernetes cluster can be [challenging](https://strimzi.io/blog/2019/04/17/accessing-kafka-part-1/).
+But using the Kafka cluster from applications running outside your Kubernetes cluster can be [challenging](https://strimzi.io/blog/2019/04/17/accessing-kafka-part-1/).
 Strimzi tries to make it as easy as possible and supports several different ways how to _expose_ the Kafka cluster:
 * Using Load Balancers
 * Using Node Ports
 * Using the Kubernetes Nginx Ingress controller
 
 When running in production-grade Kubernetes environments, these usually work fine.
-But when using a local Kubernetes cluster such as Minikube, Kind or Docker Desktop, these mechanisms are often not well-supported:
+But when using a local Kubernetes cluster such as Minikube, Kind, or Docker Desktop, these mechanisms are often not well-supported:
 * The local clusters often lack proper support for load balancers
 * They often run inside additional virtual machines or containers and use complex networking so that node ports do not work out of the box
 * While Ingress usually works, the installation of the right Ingress controller and its configuration is often complicated 
 
 One of the ways how applications are often exposed from local clusters is using port forwarding with `kubectl port-foward`.
 But using port forwarding with Apache Kafka is not so simple because of its custom discovery protocol.
-You need to forward ports for each brokers in the Kafka cluster.
+You need to forward ports for each broker in the Kafka cluster.
 And you need to make sure your advertised hosts and ports are correctly configured to the local address.
-Keksposé makes it possible to use port forwarding with Apache Kafka with the help of [Kroxylicious](https://kroxylicious.io/) project that provides Kafka proxying capabilities. 
+Keksposé makes it possible to use port forwarding with Apache Kafka with the help of the [Kroxylicious](https://kroxylicious.io/) project that provides Kafka proxying capabilities. 
 
 ## How does it work?
 
@@ -62,7 +62,7 @@ That allows it to provide native binaries to make it easier to run Keksposé.
 
 ### Installation
 
-You can download one of the release binaries from one of the release and use it.
+You can download one of the release binaries from one of the releases and use it.
 
 ### Configuration
 
@@ -78,16 +78,16 @@ Keksposé supports several parameters that can be used to configure it:
 | `--starting-port` / `-p` | The starting port number. This port number will be used for the bootstrap connection and will be used as the basis to calculate the per-broker ports.               | `50000`                                        |
 | `--kekspose-name` / `-k` | Name that will be used for the Keksposé ConfigMap and Pod.                                                                                                          | `kekspose`                                     |
 | `--timeout` / `-t`       | Timeout for how long to wait for the Proxy Pod to become ready. In milliseconds.                                                                                    | `300000`                                       |
-| `--proxy-image` / `-i`   | Container image used for the proxy (must be based on a compatible Kroxylicious container image)                                                                     | `ghcr.io/scholzj/kekspose:kroxylicious-0.13.0` |
+| `--proxy-image` / `-i`   | Container image used for the proxy (must be based on a compatible Kroxylicious container image)                                                                     | `ghcr.io/scholzj/kekspose:kroxylicious-0.16.0` |
 
-If you are using the Keksposé binary, you can just pass the options from the command line.
+If you are using the Keksposé binary, you can pass the options from the command line.
 
 ## Frequently Asked Questions
 
 ### Does Keksposé support Kafka clusters with authentication?
 
 Keksposé requires a listener without TLS encryption.
-But it supports Kafka clusters with SASL based authentication such as SCRAM-SHA or OAuth. 
+But it supports Kafka clusters with SASL-based authentication, such as SCRAM-SHA or OAuth. 
 
 ### What happens when I scale my Kafka cluster?
 
@@ -95,7 +95,7 @@ You might need to restart Keksposé after scaling up your Kafka cluster or chang
 
 ### Does Keksposé support KRaft-based Apache Kafka clusters?
 
-Keksposé supports Kraft-based Apache Kafka cluster.
+Keksposé supports a Kraft-based Apache Kafka cluster.
 However, it exposes the broker nodes only.
 
 ### What access rights do I need to run Keksposé?
@@ -107,13 +107,13 @@ Running Keksposé requires the following access rights to your Kubernetes cluste
 
 ### Does Keksposé work only with local Kubernetes clusters?
 
-Keksposé was designed with focus on local Kubernetes environments such as Minikube, Kind, or Docker Desktop.
+Keksposé was designed with a focus on local Kubernetes environments such as Minikube, Kind, or Docker Desktop.
 But it can be used with any Kubernetes cluster regardless of how and where you run it.
 
 ### Can the same Kafka cluster be exposed to multiple users in parallel?
 
-Any user that has access to the Kubernetes cluster and the necessary rights can expose it.
-But in order to be able to expose the Kafka cluster, Keksposé has to deploy the proxy into the Kubernetes cluster.
+Any user who has access to the Kubernetes cluster and the necessary rights can expose it.
+But to be able to expose the Kafka cluster, Keksposé has to deploy the proxy into the Kubernetes cluster.
 So if the same cluster should be exposed in parallel to multiple users, it is important that they each use their own value for the `--kekspose-name` option to make sure each user has a custom proxy instance. 
 
 ### What does the name Keksposé mean?

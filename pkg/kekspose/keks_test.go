@@ -2,14 +2,16 @@ package kekspose
 
 import (
 	"context"
+	"testing"
+
 	kafkav1beta2 "github.com/scholzj/strimzi-go/pkg/apis/kafka.strimzi.io/v1beta2"
 	"github.com/scholzj/strimzi-go/pkg/client/clientset/versioned/fake"
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"testing"
 )
 
 func TestZooBasedCluster(t *testing.T) {
+	replicas := int32(3)
 	kafka := &kafkav1beta2.Kafka{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "my-cluster",
@@ -18,7 +20,7 @@ func TestZooBasedCluster(t *testing.T) {
 		Spec: &kafkav1beta2.KafkaSpec{
 			Kafka: &kafkav1beta2.KafkaClusterSpec{
 				Version:  "3.9.0",
-				Replicas: 3,
+				Replicas: &replicas,
 				Listeners: []kafkav1beta2.GenericKafkaListener{{
 					Name: "plain",
 					Type: kafkav1beta2.INTERNAL_KAFKALISTENERTYPE,
@@ -74,6 +76,8 @@ func TestNodePoolBasedCluster(t *testing.T) {
 		},
 	}
 
+	volumeId := int32(0)
+
 	nodePool1 := &kafkav1beta2.KafkaNodePool{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "pool-a",
@@ -88,7 +92,7 @@ func TestNodePoolBasedCluster(t *testing.T) {
 			Storage: &kafkav1beta2.Storage{
 				Type: kafkav1beta2.JBOD_STORAGETYPE,
 				Volumes: []kafkav1beta2.SingleVolumeStorage{{
-					Id:   0,
+					Id:   &volumeId,
 					Type: kafkav1beta2.PERSISTENT_CLAIM_SINGLEVOLUMESTORAGETYPE,
 					Size: "100Gi",
 				}},
@@ -113,7 +117,7 @@ func TestNodePoolBasedCluster(t *testing.T) {
 			Storage: &kafkav1beta2.Storage{
 				Type: kafkav1beta2.JBOD_STORAGETYPE,
 				Volumes: []kafkav1beta2.SingleVolumeStorage{{
-					Id:   0,
+					Id:   &volumeId,
 					Type: kafkav1beta2.PERSISTENT_CLAIM_SINGLEVOLUMESTORAGETYPE,
 					Size: "100Gi",
 				}},
@@ -138,7 +142,7 @@ func TestNodePoolBasedCluster(t *testing.T) {
 			Storage: &kafkav1beta2.Storage{
 				Type: kafkav1beta2.JBOD_STORAGETYPE,
 				Volumes: []kafkav1beta2.SingleVolumeStorage{{
-					Id:   0,
+					Id:   &volumeId,
 					Type: kafkav1beta2.PERSISTENT_CLAIM_SINGLEVOLUMESTORAGETYPE,
 					Size: "100Gi",
 				}},
@@ -170,6 +174,7 @@ func TestNodePoolBasedCluster(t *testing.T) {
 }
 
 func TestUnreadyCluster(t *testing.T) {
+	replicas := int32(3)
 	kafka := &kafkav1beta2.Kafka{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "my-cluster",
@@ -178,7 +183,7 @@ func TestUnreadyCluster(t *testing.T) {
 		Spec: &kafkav1beta2.KafkaSpec{
 			Kafka: &kafkav1beta2.KafkaClusterSpec{
 				Version:  "3.9.0",
-				Replicas: 3,
+				Replicas: &replicas,
 				Listeners: []kafkav1beta2.GenericKafkaListener{{
 					Name: "internal",
 					Type: kafkav1beta2.INTERNAL_KAFKALISTENERTYPE,
@@ -200,6 +205,7 @@ func TestUnreadyCluster(t *testing.T) {
 }
 
 func TestNoTlsListener(t *testing.T) {
+	replicas := int32(3)
 	kafka := &kafkav1beta2.Kafka{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "my-cluster",
@@ -208,7 +214,7 @@ func TestNoTlsListener(t *testing.T) {
 		Spec: &kafkav1beta2.KafkaSpec{
 			Kafka: &kafkav1beta2.KafkaClusterSpec{
 				Version:  "3.9.0",
-				Replicas: 3,
+				Replicas: &replicas,
 				Listeners: []kafkav1beta2.GenericKafkaListener{{
 					Name: "tls",
 					Type: kafkav1beta2.INTERNAL_KAFKALISTENERTYPE,
@@ -240,7 +246,7 @@ func TestNoTlsListener(t *testing.T) {
 	assert.Equal(t, "no Kafka listener without TLS encryption found", err.Error())
 	assert.Nil(t, keks)
 
-	// With sepcified listener
+	// With specified listener
 	keks, err = bakeKeks(client, "my-namespace", "my-cluster", "tls")
 	assert.NotNil(t, err)
 	assert.Equal(t, "Kafka listener with name tls exists, but has unsupported configuration (TLS encryption is enabled)", err.Error())
@@ -248,6 +254,7 @@ func TestNoTlsListener(t *testing.T) {
 }
 
 func TestNonExistentListener(t *testing.T) {
+	replicas := int32(3)
 	kafka := &kafkav1beta2.Kafka{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "my-cluster",
@@ -256,7 +263,7 @@ func TestNonExistentListener(t *testing.T) {
 		Spec: &kafkav1beta2.KafkaSpec{
 			Kafka: &kafkav1beta2.KafkaClusterSpec{
 				Version:  "3.9.0",
-				Replicas: 3,
+				Replicas: &replicas,
 				Listeners: []kafkav1beta2.GenericKafkaListener{{
 					Name: "tls",
 					Type: kafkav1beta2.INTERNAL_KAFKALISTENERTYPE,
@@ -289,6 +296,7 @@ func TestNonExistentListener(t *testing.T) {
 }
 
 func TestBootstrapAddresses(t *testing.T) {
+	replicas := int32(3)
 	kafka := &kafkav1beta2.Kafka{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "my-cluster",
@@ -297,7 +305,7 @@ func TestBootstrapAddresses(t *testing.T) {
 		Spec: &kafkav1beta2.KafkaSpec{
 			Kafka: &kafkav1beta2.KafkaClusterSpec{
 				Version:  "3.9.0",
-				Replicas: 3,
+				Replicas: &replicas,
 				Listeners: []kafkav1beta2.GenericKafkaListener{{
 					Name: "plain",
 					Type: kafkav1beta2.INTERNAL_KAFKALISTENERTYPE,

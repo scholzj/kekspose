@@ -19,12 +19,13 @@ package kekspose
 import (
 	"context"
 	"fmt"
-	strimziapi "github.com/scholzj/strimzi-go/pkg/apis/kafka.strimzi.io/v1beta2"
-	strimziclient "github.com/scholzj/strimzi-go/pkg/client/clientset/versioned"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"log"
 	"slices"
 	"strings"
+
+	strimziapi "github.com/scholzj/strimzi-go/pkg/apis/kafka.strimzi.io/v1beta2"
+	strimziclient "github.com/scholzj/strimzi-go/pkg/client/clientset/versioned"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type Keks struct {
@@ -188,9 +189,9 @@ func findNodes(client strimziclient.Interface, kafka *strimziapi.Kafka) ([]int32
 		return nodeIds, nil
 	} else {
 		log.Printf("Node Pools not enabled -> calculating node IDs for %d replicas", kafka.Spec.Kafka.Replicas)
-		nodeIds := make([]int32, kafka.Spec.Kafka.Replicas)
+		nodeIds := make([]int32, *kafka.Spec.Kafka.Replicas)
 
-		for i := int32(0); i < kafka.Spec.Kafka.Replicas; i++ {
+		for i := int32(0); i < *kafka.Spec.Kafka.Replicas; i++ {
 			nodeIds[i] = i
 		}
 

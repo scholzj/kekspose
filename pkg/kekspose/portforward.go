@@ -18,13 +18,14 @@ package kekspose
 
 import (
 	"fmt"
+	"log"
+	"net/http"
+	"os"
+
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/portforward"
 	"k8s.io/client-go/transport/spdy"
-	"log"
-	"net/http"
-	"os"
 )
 
 type PortForward struct {
