@@ -17,15 +17,16 @@ limitations under the License.
 package kekspose
 
 import (
-	strimzi "github.com/scholzj/strimzi-go/pkg/client/clientset/versioned"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/util/homedir"
 	"log"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"syscall"
+
+	strimzi "github.com/scholzj/strimzi-go/pkg/client/clientset/versioned"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/util/homedir"
 )
 
 type Kekspose struct {
@@ -73,13 +74,13 @@ func (k *Kekspose) ExposeKafka() {
 		log.Fatalf("Failed to create Kubernetes client configuration: %v", err)
 	}
 
-	// Create Kubernetes client
+	// Create a Kubernetes client
 	kubeclient, err := kubernetes.NewForConfig(kubeconfig)
 	if err != nil {
 		log.Fatalf("Failed to create Kubernetes client: %v", err)
 	}
 
-	// Create Strimzi client
+	// Create a Strimzi client
 	strimziclient, err := strimzi.NewForConfig(kubeconfig)
 	if err != nil {
 		log.Fatalf("Failed to create Strimzi client: %v", err)
