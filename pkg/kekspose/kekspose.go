@@ -21,8 +21,10 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sync"
 	"syscall"
 
+	"github.com/scholzj/kekspose/pkg/kekspose/proksy"
 	strimzi "github.com/scholzj/strimzi-go/pkg/client/clientset/versioned"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -34,10 +36,7 @@ type Kekspose struct {
 	Namespace      string
 	ClusterName    string
 	ListenerName   string
-	KeksposeName   string
-	ProxyImage     string
-	StartingPort   uint16
-	Timeout        uint32
+	StartingPort   uint32
 }
 
 func (k *Kekspose) ExposeKafka() {
@@ -92,50 +91,48 @@ func (k *Kekspose) ExposeKafka() {
 		log.Fatalf("Failed to find the Kafka cluster with a suitable listener: %v", err)
 	}
 
-	// Create and Deploy the proxy
-	proxy := Proxy{
-		Client:       kubeclient,
-		Namespace:    k.Namespace,
-		KeksposeName: k.KeksposeName,
-		ProxyImage:   k.ProxyImage,
-		StartingPort: k.StartingPort,
-		Timeout:      k.Timeout,
-		Keks:         *keks,
+	// Prepare the mapping
+	portMapping := make(map[int32]uint32)
+	nextPort := k.StartingPort
+
+	for nodeId, _ := range keks.Nodes {
+		portMapping[nodeId] = nextPort
+		nextPort++
 	}
 
-	log.Printf("Deploying Keksposé proxy")
+	portForwarders := make([]*PortForward, 0, len(keks.Nodes))
 
-	err = proxy.createConfigMap()
-	if err != nil {
-		log.Fatalf("Failed to create the Proxy ConfigMap: %v", err)
+	// LocalPort forwarders
+	for nodeId, node := range keks.Nodes {
+		portForwarder := PortForward{
+			KubeConfig: kubeconfig,
+			Client:     kubeclient,
+			Namespace:  k.Namespace,
+			PodName:    node,
+			LocalPort:  portMapping[nodeId],
+			RemotePort: keks.Port,
+			Proxy:      proksy.NewProksy(nodeId, portMapping),
+		}
+		portForwarders = append(portForwarders, &portForwarder)
 	}
-	defer proxy.deleteConfigMap()
-
-	err = proxy.deployProxyPod()
-	if err != nil {
-		log.Fatalf("Failed to deploy the Proxy: %v", err)
-	}
-	defer proxy.deleteProxyPod()
 
 	// Hook-up shutdown signal
 	c := make(chan os.Signal)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-c
-		log.Print("Deleting the proxy at shutdown")
-		proxy.deleteProxyPod()
-		proxy.deleteConfigMap()
-		os.Exit(1)
+		log.Print("Shutting down")
+		os.Exit(0)
 	}()
 
-	// Start forwarding the ports
-	portForwarder := PortForward{
-		KubeConfig:   kubeconfig,
-		Client:       kubeclient,
-		Namespace:    k.Namespace,
-		KeksposeName: k.KeksposeName,
-		StartingPort: k.StartingPort,
-		Keks:         *keks,
+	log.Printf("Starting port forwarders")
+
+	for _, pf := range portForwarders {
+		go pf.forwardPorts()
 	}
-	portForwarder.forwardPorts()
+
+	log.Printf("Port forwarders should be running")
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	wg.Wait()
 }

@@ -22,23 +22,25 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/scholzj/kekspose/pkg/kekspose/proksy"
+	"github.com/scholzj/kekspose/pkg/kekspose/proxiedforward"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/portforward"
 	"k8s.io/client-go/transport/spdy"
 )
 
 type PortForward struct {
-	KubeConfig   *rest.Config
-	Client       *kubernetes.Clientset
-	Namespace    string
-	KeksposeName string
-	StartingPort uint16
-	Keks         Keks
+	KubeConfig *rest.Config
+	Client     *kubernetes.Clientset
+	Namespace  string
+	PodName    string
+	LocalPort  uint32
+	RemotePort uint32
+	Proxy      *proksy.Proksy
 }
 
 func (pf *PortForward) forwardPorts() {
-	url := pf.Client.CoreV1().RESTClient().Post().Resource("pods").Namespace(pf.Namespace).Name(pf.KeksposeName).SubResource("portforward").URL()
+	url := pf.Client.CoreV1().RESTClient().Post().Resource("pods").Namespace(pf.Namespace).Name(pf.PodName).SubResource("portforward").URL()
 
 	stopCh := make(<-chan struct{})
 	readyCh := make(chan struct{})
@@ -49,26 +51,14 @@ func (pf *PortForward) forwardPorts() {
 	}
 
 	dialer := spdy.NewDialer(upgrader, &http.Client{Transport: transport}, http.MethodPost, url)
-	fw, err := portforward.New(dialer, pf.ports(), stopCh, readyCh, os.Stdout, os.Stdout)
+	fw, err := proxiedforward.New(dialer, []string{fmt.Sprintf("%d:%d", pf.LocalPort, pf.RemotePort)}, stopCh, readyCh, os.Stdout, os.Stdout, pf.Proxy)
 	if err != nil {
 		log.Fatalf("Failed to create port forwarder: %v", err)
 	}
 
-	log.Printf("Starting port forwarding. Use localhost:%d to connect to the exposed Kafka cluster.", pf.StartingPort)
+	log.Printf("Starting port forwarding between localhost:%d and %s:%d in namespace %s.", pf.LocalPort, pf.PodName, pf.RemotePort, pf.Namespace)
 
 	if err := fw.ForwardPorts(); err != nil {
 		log.Fatalf("Failed to forward port: %v", err)
 	}
-}
-
-func (pf *PortForward) ports() []string {
-	var ports []string
-
-	for _, nodeId := range pf.Keks.NodeIDs {
-		ports = append(ports, fmt.Sprintf("%d:%d", int32(pf.StartingPort)+nodeId+1, int32(pf.StartingPort)+nodeId+1))
-	}
-
-	ports = append(ports, fmt.Sprintf("%d:%d", pf.StartingPort, pf.StartingPort))
-
-	return ports
 }
