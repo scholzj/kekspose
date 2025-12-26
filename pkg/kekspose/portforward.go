@@ -18,9 +18,9 @@ package kekspose
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
-	"os"
+	"net/url"
 
 	"github.com/scholzj/kekspose/pkg/kekspose/proksy"
 	"github.com/scholzj/kekspose/pkg/kekspose/proxiedforward"
@@ -29,36 +29,44 @@ import (
 	"k8s.io/client-go/transport/spdy"
 )
 
-type PortForward struct {
+type PortForwarder struct {
 	KubeConfig *rest.Config
-	Client     *kubernetes.Clientset
-	Namespace  string
-	PodName    string
-	LocalPort  uint32
-	RemotePort uint32
+	Url        *url.URL
+	Ports      []string
 	Proxy      *proksy.Proksy
+	Ready      chan struct{}
+	Stop       chan struct{}
 }
 
-func (pf *PortForward) forwardPorts() {
-	url := pf.Client.CoreV1().RESTClient().Post().Resource("pods").Namespace(pf.Namespace).Name(pf.PodName).SubResource("portforward").URL()
+func NewPortForwarder(kubeConfig *rest.Config, kubeClient *kubernetes.Clientset, namespace string, podName string, localPort uint32, remotePort uint32, proxy *proksy.Proksy) *PortForwarder {
+	return &PortForwarder{
+		KubeConfig: kubeConfig,
+		Url:        kubeClient.CoreV1().RESTClient().Post().Resource("pods").Namespace(namespace).Name(podName).SubResource("portforward").URL(),
+		Ports:      []string{fmt.Sprintf("%d:%d", localPort, remotePort)},
+		Proxy:      proxy,
+		Ready:      make(chan struct{}),
+		Stop:       make(chan struct{}),
+	}
+}
 
-	stopCh := make(<-chan struct{})
-	readyCh := make(chan struct{})
-
+func (pf *PortForwarder) ForwardPorts() error {
 	transport, upgrader, err := spdy.RoundTripperFor(pf.KubeConfig)
 	if err != nil {
-		log.Fatalf("Failed to create round tripper: %v", err)
+		slog.Error("Failed to create round tripper", "error", err)
+		return err
 	}
 
-	dialer := spdy.NewDialer(upgrader, &http.Client{Transport: transport}, http.MethodPost, url)
-	fw, err := proxiedforward.New(dialer, []string{fmt.Sprintf("%d:%d", pf.LocalPort, pf.RemotePort)}, stopCh, readyCh, os.Stdout, os.Stdout, pf.Proxy)
+	dialer := spdy.NewDialer(upgrader, &http.Client{Transport: transport}, http.MethodPost, pf.Url)
+	fw, err := proxiedforward.New(dialer, pf.Ports, pf.Stop, pf.Ready, pf.Proxy)
 	if err != nil {
-		log.Fatalf("Failed to create port forwarder: %v", err)
+		slog.Error("Failed to create port forwarder", "error", err)
+		return err
 	}
-
-	log.Printf("Starting port forwarding between localhost:%d and %s:%d in namespace %s.", pf.LocalPort, pf.PodName, pf.RemotePort, pf.Namespace)
 
 	if err := fw.ForwardPorts(); err != nil {
-		log.Fatalf("Failed to forward port: %v", err)
+		slog.Error("Failed to forward port", "error", err)
+		return err
 	}
+
+	return nil
 }

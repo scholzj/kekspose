@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"sort"
@@ -65,8 +66,6 @@ type ProxiedForwarder struct {
 	Ready         chan struct{}
 	requestIDLock sync.Mutex
 	requestID     int
-	out           io.Writer
-	errOut        io.Writer
 }
 
 // ProxiedPort contains a Local:Remote port pairing.
@@ -167,12 +166,12 @@ func parseAddresses(addressesToParse []string) ([]listenAddress, error) {
 }
 
 // New creates a new ProxiedForwarder with localhost listen addresses.
-func New(dialer httpstream.Dialer, ports []string, stopChan <-chan struct{}, readyChan chan struct{}, out, errOut io.Writer, proksy *proksy.Proksy) (*ProxiedForwarder, error) {
-	return NewOnAddresses(dialer, []string{"localhost"}, ports, stopChan, readyChan, out, errOut, proksy)
+func New(dialer httpstream.Dialer, ports []string, stopChan <-chan struct{}, readyChan chan struct{}, proksy *proksy.Proksy) (*ProxiedForwarder, error) {
+	return NewOnAddresses(dialer, []string{"localhost"}, ports, stopChan, readyChan, proksy)
 }
 
 // NewOnAddresses creates a new ProxiedForwarder with custom listen addresses.
-func NewOnAddresses(dialer httpstream.Dialer, addresses []string, ports []string, stopChan <-chan struct{}, readyChan chan struct{}, out, errOut io.Writer, proksy *proksy.Proksy) (*ProxiedForwarder, error) {
+func NewOnAddresses(dialer httpstream.Dialer, addresses []string, ports []string, stopChan <-chan struct{}, readyChan chan struct{}, proksy *proksy.Proksy) (*ProxiedForwarder, error) {
 	if len(addresses) == 0 {
 		return nil, errors.New("you must specify at least 1 address")
 	}
@@ -193,8 +192,6 @@ func NewOnAddresses(dialer httpstream.Dialer, addresses []string, ports []string
 		ports:     parsedPorts,
 		stopChan:  stopChan,
 		Ready:     readyChan,
-		out:       out,
-		errOut:    errOut,
 		proksy:    proksy,
 	}, nil
 }
@@ -232,9 +229,7 @@ func (pf *ProxiedForwarder) forward() error {
 		case err == nil:
 			listenSuccess = true
 		default:
-			if pf.errOut != nil {
-				fmt.Fprintf(pf.errOut, "Unable to listen on port %d: %v\n", port.Local, err)
-			}
+			slog.Error("Unable to listen", "port", port.Local, "error", err)
 		}
 	}
 
@@ -304,13 +299,11 @@ func (pf *ProxiedForwarder) getListener(protocol string, hostname string, port *
 	localPortUInt, err := strconv.ParseUint(localPort, 10, 16)
 
 	if err != nil {
-		fmt.Fprintf(pf.out, "Failed to forward from %s:%d -> %d\n", hostname, localPortUInt, port.Remote)
+		slog.Error("Failed to forward", "hostname", hostname, "localPort", localPortUInt, "remotePort", port.Remote)
 		return nil, fmt.Errorf("error parsing local port: %s from %s (%s)", err, listenerAddress, host)
 	}
 	port.Local = uint16(localPortUInt)
-	if pf.out != nil {
-		fmt.Fprintf(pf.out, "Forwarding from %s -> %d\n", net.JoinHostPort(hostname, strconv.Itoa(int(localPortUInt))), port.Remote)
-	}
+	slog.Debug("Forwarding", "source", net.JoinHostPort(hostname, strconv.Itoa(int(localPortUInt))), "target", port.Remote)
 
 	return listener, nil
 }
@@ -349,9 +342,7 @@ func (pf *ProxiedForwarder) nextRequestID() int {
 func (pf *ProxiedForwarder) handleConnection(conn net.Conn, port ProxiedPort) {
 	defer conn.Close()
 
-	if pf.out != nil {
-		fmt.Fprintf(pf.out, "Handling connection for %d\n", port.Local)
-	}
+	slog.Info("Handling connection", "localPort", port.Local)
 
 	requestID := pf.nextRequestID()
 
@@ -390,11 +381,10 @@ func (pf *ProxiedForwarder) handleConnection(conn net.Conn, port ProxiedPort) {
 	}
 	defer pf.streamConn.RemoveStreams(dataStream)
 
+	// Start proxying the connection
 	clientToBroker := make(chan struct{})
 	brokerToClient := make(chan struct{})
-
-	go pf.proksy.BrokerToClient(conn, dataStream, brokerToClient)
-	go pf.proksy.ClientToBroker(conn, dataStream, clientToBroker)
+	go pf.proksy.Proxy(conn, dataStream, brokerToClient, clientToBroker)
 
 	// wait for either a local->remote error or for copying from remote->local to finish
 	select {

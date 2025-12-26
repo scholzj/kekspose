@@ -19,7 +19,7 @@ package kekspose
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"slices"
 	"strings"
 
@@ -75,7 +75,7 @@ func findKafka(strimzi strimziclient.Interface, namespace string, clusterName st
 		return nil, fmt.Errorf("Kafka cluster %s in namespace %s was found, but it is not ready", clusterName, namespace)
 	}
 
-	log.Printf("Found Kafka cluster %s in namespace %s", clusterName, namespace)
+	slog.Info("Found Kafka cluster", "name", clusterName, "namespace", namespace)
 
 	return kafka, nil
 }
@@ -114,14 +114,14 @@ func findPort(kafka *strimziapi.Kafka, listenerName string) (uint32, error) {
 		return 0, fmt.Errorf("failed to find listener")
 	}
 
-	log.Printf("Port %d from listener %s will be used", listener.Port, listener.Name)
+	slog.Info("Found suitable port", "port", listener.Port, "listener", listener.Name)
 	return uint32(listener.Port), nil
 }
 
 func findFirstUnencryptedListener(kafka *strimziapi.Kafka) (*strimziapi.GenericKafkaListener, error) {
 	for _, listener := range kafka.Spec.Kafka.Listeners {
 		if !listener.Tls {
-			log.Printf("Found listener %s without TLS encryption", listener.Name)
+			slog.Info("Found suitable listener without TLS encryption", "listener", listener.Name)
 			return &listener, nil
 		}
 	}
@@ -149,7 +149,7 @@ func findListenerByName(kafka *strimziapi.Kafka, listenerName string) (*strimzia
 
 func findNodes(strimzi strimziclient.Interface, kafka *strimziapi.Kafka) (map[int32]string, error) {
 	if len(kafka.Annotations) > 0 && kafka.Annotations["strimzi.io/node-pools"] == "enabled" {
-		log.Printf("Node Pools are enabled -> calculating nodes from their status")
+		slog.Debug("Node Pools are enabled -> calculating nodes from their status")
 		nodes := make(map[int32]string)
 
 		nodePools, err := strimzi.KafkaV1beta2().KafkaNodePools(kafka.Namespace).List(context.TODO(), v1.ListOptions{LabelSelector: "strimzi.io/cluster=" + kafka.Name})
@@ -167,17 +167,17 @@ func findNodes(strimzi strimziclient.Interface, kafka *strimziapi.Kafka) (map[in
 			}
 		}
 
-		log.Printf("Found %d nodes: %v", len(nodes), nodes)
+		slog.Info("Found Kafka nodes", "nodes", nodes)
 		return nodes, nil
 	} else {
-		log.Printf("Node Pools not enabled -> calculating node IDs for %d replicas", kafka.Spec.Kafka.Replicas)
+		slog.Debug("Node Pools not enabled -> calculating node IDs", "replicas", kafka.Spec.Kafka.Replicas)
 		nodes := make(map[int32]string)
 
 		for i := int32(0); i < *kafka.Spec.Kafka.Replicas; i++ {
 			nodes[i] = fmt.Sprintf("%s-kafka-%d", kafka.Name, i)
 		}
 
-		log.Printf("Found %d nodes: %v", len(nodes), nodes)
+		slog.Info("Found Kafka nodes", "nodes", nodes)
 		return nodes, nil
 	}
 }

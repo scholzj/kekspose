@@ -17,10 +17,10 @@ limitations under the License.
 package cmd
 
 import (
+	"log/slog"
 	"os"
 
-	kekspose2 "github.com/scholzj/kekspose/pkg/kekspose"
-
+	"github.com/scholzj/kekspose/pkg/kekspose"
 	"github.com/spf13/cobra"
 )
 
@@ -29,6 +29,7 @@ var namespace string
 var clusterName string
 var listenerName string
 var startingPort uint32
+var verbose int
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -36,7 +37,21 @@ var rootCmd = &cobra.Command{
 	Short: "Expose your Kafka cluster outside your Minikube, Kind, or Docker Desktop clusters",
 	Long:  `Expose your Kafka cluster outside your Minikube, Kind, or Docker Desktop clusters`,
 	Run: func(cmd *cobra.Command, args []string) {
-		kekspose := kekspose2.Kekspose{
+		switch verbose {
+		case 0:
+		// Nothing
+		case 1:
+			slog.SetLogLoggerLevel(slog.LevelDebug)
+		}
+		if verbose <= 0 {
+			slog.SetLogLoggerLevel(slog.LevelInfo)
+		} else if verbose == 1 {
+			slog.SetLogLoggerLevel(slog.LevelDebug)
+		} else {
+			slog.SetLogLoggerLevel(slog.Level(-10))
+		}
+
+		kekspose := kekspose.Kekspose{
 			KubeConfigPath: kubeconfigpath,
 			Namespace:      namespace,
 			ClusterName:    clusterName,
@@ -70,4 +85,5 @@ func init() {
 	rootCmd.Flags().StringVarP(&clusterName, "cluster-name", "c", "my-cluster", "Name of the Kafka cluster.")
 	rootCmd.Flags().StringVarP(&listenerName, "listener-name", "l", "", "Name of the listener that should be exposed.")
 	rootCmd.Flags().Uint32VarP(&startingPort, "starting-port", "p", 50000, "The starting port number. This port number will be used for the bootstrap connection and will be used as the basis to calculate the per-broker ports.")
+	rootCmd.Flags().CountVarP(&verbose, "verbose", "v", "Enables verbose logging (can be repeated: -v, -vv, -vvv).")
 }

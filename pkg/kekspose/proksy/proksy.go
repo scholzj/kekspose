@@ -2,8 +2,9 @@ package proksy
 
 import (
 	"bytes"
-	"fmt"
+	"context"
 	"io"
+	"log/slog"
 	"net"
 
 	"github.com/scholzj/go-kafka-protocol/api/apiversions"
@@ -14,58 +15,67 @@ import (
 	"k8s.io/utils/ptr"
 )
 
+var (
+	TraceLevel = slog.Level(-10)
+)
+
 type Proksy struct {
-	NodeId       int32
-	PortMapping  map[int32]uint32
-	Correlations map[int32]protocol.RequestHeader
+	NodeId      int32
+	PortMapping map[int32]uint32
 }
 
 func NewProksy(nodeId int32, portMapping map[int32]uint32) *Proksy {
 	return &Proksy{
-		NodeId:       nodeId,
-		PortMapping:  portMapping,
-		Correlations: make(map[int32]protocol.RequestHeader),
+		NodeId:      nodeId,
+		PortMapping: portMapping,
 	}
 }
 
-func (p *Proksy) BrokerToClient(client net.Conn, broker httpstream.Stream, shutdownChannel chan struct{}) {
+func (p *Proksy) Proxy(client net.Conn, broker httpstream.Stream, brokerToClientShutdown chan struct{}, clientToBrokerShutdown chan struct{}) {
+	correlations := make(map[int32]protocol.RequestHeader)
+
+	go p.BrokerToClient(client, broker, brokerToClientShutdown, correlations)
+	go p.ClientToBroker(client, broker, clientToBrokerShutdown, correlations)
+}
+
+func (p *Proksy) BrokerToClient(client net.Conn, broker httpstream.Stream, shutdownChannel chan struct{}, correlations map[int32]protocol.RequestHeader) {
 	defer client.Close()
 
 	for {
-		response, err := protocol.ReadResponse(broker, p.Correlations)
+		response, err := protocol.ReadResponse(broker, correlations)
 		if err != nil {
 			if err == io.EOF {
-				fmt.Printf("<- Reached EOF for node %d\n", p.NodeId)
+				slog.Debug("<- Reached EOF", "node", p.NodeId)
 			} else {
-				fmt.Printf("<- Failed to read bytes for node %d\n", p.NodeId, err)
+				slog.Error("<- Failed to read bytes", "node", p.NodeId, "error", err)
 				break
 			}
 
 			return
 		}
 
-		fmt.Printf("<- Response: node=%d; size=%d; apiKey=%d; version=%d; correlationID=%d; clientId=%s; bodySize=%d bytes\n", p.NodeId, response.Size, response.ApiKey, response.ApiVersion, response.CorrelationId, *response.ClientId, response.Body.Len())
-		delete(p.Correlations, response.CorrelationId)
+		slog.Debug("<- Received response", "node", p.NodeId, "size", response.Size, "apiKey", response.ApiKey, "apiVersion", response.ApiVersion, "correlationId", response.CorrelationId, "clientId", *response.ClientId, "bodySize", response.Body.Len())
+		delete(correlations, response.CorrelationId)
 
 		if response.ApiKey == 3 {
 			metadataResponse := metadata.MetadataResponse{}
 			err := metadataResponse.Read(response)
 			if err != nil {
-				fmt.Printf("<- Failed to decode Metadata response from node %d: %v\n", p.NodeId, err)
+				slog.Error("<- Failed to decode Metadata response", "node", p.NodeId, "error", err)
 				break
 			}
 
-			for i, _ := range *metadataResponse.Brokers {
+			for i := range *metadataResponse.Brokers {
 				(*metadataResponse.Brokers)[i].Host = "localhost"
 				(*metadataResponse.Brokers)[i].Port = int32(p.PortMapping[(*metadataResponse.Brokers)[i].NodeId])
 			}
 
-			metadataResponse.PrettyPrint()
+			slog.Log(context.Background(), TraceLevel, metadataResponse.PrettyPrint())
 
 			buf := bytes.NewBuffer(make([]byte, 0))
 			err = metadataResponse.Write(buf)
 			if err != nil {
-				fmt.Printf("<- Failed to re-encode Metadata response from node %d: %v\n", p.NodeId, err)
+				slog.Error("<- Failed to re-encode Metadata response", "node", p.NodeId, "error", err)
 				break
 			}
 			response.Body = buf
@@ -73,48 +83,48 @@ func (p *Proksy) BrokerToClient(client net.Conn, broker httpstream.Stream, shutd
 			findCoordinator := findcoordinator.FindCoordinatorResponse{}
 			err := findCoordinator.Read(response)
 			if err != nil {
-				fmt.Println("Failed to decode FindCoordinator response", err)
+				slog.Error("<- Failed to decode FindCoordinator response", "node", p.NodeId, "error", err)
 			}
 
 			if findCoordinator.Host != nil {
 				findCoordinator.Host = ptr.To("localhost")
 				findCoordinator.Port = int32(p.PortMapping[findCoordinator.NodeId])
 			} else if findCoordinator.Coordinators != nil {
-				for i, _ := range *findCoordinator.Coordinators {
+				for i := range *findCoordinator.Coordinators {
 					(*findCoordinator.Coordinators)[i].Host = ptr.To("localhost")
 					(*findCoordinator.Coordinators)[i].Port = int32(p.PortMapping[(*findCoordinator.Coordinators)[i].NodeId])
 				}
 			}
 
-			findCoordinator.PrettyPrint()
+			slog.Log(context.Background(), TraceLevel, findCoordinator.PrettyPrint())
 
 			buf := bytes.NewBuffer(make([]byte, 0))
 			err = findCoordinator.Write(buf)
 			if err != nil {
-				fmt.Println("Failed to reencode FindCoordinator response", err)
+				slog.Error("<- Failed to re-encode FindCoordinator response", "node", p.NodeId, "error", err)
 			}
 			response.Body = buf
 		} else if response.ApiKey == 18 {
 			apiVersions := apiversions.ApiVersionsResponse{}
 			err := apiVersions.Read(response)
 			if err != nil {
-				fmt.Println("Failed to decode ApiVersions response", err)
+				slog.Error("<- Failed to decode ApiVersions response", "node", p.NodeId, "error", err)
 			}
 
-			apiVersions.PrettyPrint()
+			slog.Log(context.Background(), TraceLevel, apiVersions.PrettyPrint())
 
 			buf := bytes.NewBuffer(make([]byte, 0))
 			err = apiVersions.Write(buf)
 			if err != nil {
-				fmt.Println("Failed to reencode ApiVersions response", err)
+				slog.Error("<- Failed to re-encode ApiVersions response", "node", p.NodeId, "error", err)
 			}
 			response.Body = buf
 		}
 
-		fmt.Printf("<- Proxying response from remote for node %d\n", p.NodeId)
+		slog.Debug("<- Proxying response from remote", "node", p.NodeId)
 		err = response.Write(client)
 		if err != nil {
-			fmt.Printf("<- Failed to echo bytes for node %d: %v\n", p.NodeId, err)
+			slog.Debug("<- Failed to echo bytes", "node", p.NodeId, "error", err)
 			break
 		}
 	}
@@ -123,76 +133,76 @@ func (p *Proksy) BrokerToClient(client net.Conn, broker httpstream.Stream, shutd
 	close(shutdownChannel)
 }
 
-func (p *Proksy) ClientToBroker(client net.Conn, broker httpstream.Stream, shutdownChannel chan struct{}) {
+func (p *Proksy) ClientToBroker(client net.Conn, broker httpstream.Stream, shutdownChannel chan struct{}, correlations map[int32]protocol.RequestHeader) {
 	defer broker.Close()
 
 	for {
 		request, err := protocol.ReadRequest(client)
 		if err != nil {
 			if err == io.EOF {
-				fmt.Printf("-> Reached EOF for node %d\n", p.NodeId)
+				slog.Debug("-> Reached EOF", "node", p.NodeId)
 			} else {
-				fmt.Printf("-> Failed to read bytes for node %d\n", p.NodeId, err)
+				slog.Error("-> Failed to read bytes", "node", p.NodeId, "error", err)
 				break
 			}
 
 			return
 		}
 
-		fmt.Printf("-> Received request: node=%d; size=%d; apiKey=%d; version=%d; correlationID=%d; clientId=%s; bodySize=%d bytes\n", p.NodeId, request.Size, request.ApiKey, request.ApiVersion, request.CorrelationId, *request.ClientId, request.Body.Len())
-		p.Correlations[request.CorrelationId] = request.RequestHeader
+		slog.Debug("-> Received request", "node", p.NodeId, "size", request.Size, "apiKey", request.ApiKey, "apiVersion", request.ApiVersion, "correlationId", request.CorrelationId, "clientId", *request.ClientId, "bodySize", request.Body.Len())
+		correlations[request.CorrelationId] = request.RequestHeader
 
 		if request.ApiKey == 18 {
 			apiVersions := apiversions.ApiVersionsRequest{}
 			err := apiVersions.Read(request)
 			if err != nil {
-				fmt.Println("Failed to decode ApiVersions request", err)
+				slog.Error("Failed to decode ApiVersions request", "error", err)
 			}
 
-			apiVersions.PrettyPrint()
+			slog.Log(context.Background(), TraceLevel, apiVersions.PrettyPrint())
 
 			buf := bytes.NewBuffer(make([]byte, 0))
 			err = apiVersions.Write(buf)
 			if err != nil {
-				fmt.Println("Failed to reencode ApiVersions request", err)
+				slog.Error("Failed to re-encode ApiVersions request", "error", err)
 			}
 			request.Body = buf
 		} else if request.ApiKey == 10 {
 			findCoordinator := findcoordinator.FindCoordinatorRequest{}
 			err := findCoordinator.Read(request)
 			if err != nil {
-				fmt.Println("Failed to decode FindCoordinator request", err)
+				slog.Error("Failed to decode FindCoordinator request", "error", err)
 			}
 
-			findCoordinator.PrettyPrint()
+			slog.Log(context.Background(), TraceLevel, findCoordinator.PrettyPrint())
 
 			buf := bytes.NewBuffer(make([]byte, 0))
 			err = findCoordinator.Write(buf)
 			if err != nil {
-				fmt.Printf("Failed to re-encode request", err)
+				slog.Error("Failed to re-encode request", "error", err)
 			}
 			request.Body = buf
 		} else if request.ApiKey == 3 {
 			metadataRequest := metadata.MetadataRequest{}
 			err := metadataRequest.Read(request)
 			if err != nil {
-				fmt.Println("Failed to decode ApiVersions request", err)
+				slog.Error("Failed to decode ApiVersions request", "error", err)
 			}
 
-			metadataRequest.PrettyPrint()
+			slog.Log(context.Background(), TraceLevel, metadataRequest.PrettyPrint())
 
 			buf := bytes.NewBuffer(make([]byte, 0))
 			err = metadataRequest.Write(buf)
 			if err != nil {
-				fmt.Printf("Failed to re-encode request", err)
+				slog.Error("Failed to re-encode request", "error", err)
 			}
 			request.Body = buf
 		}
 
-		fmt.Printf("-> Proxying request from local to remote for node %d\n", p.NodeId)
+		slog.Debug("-> Proxying request from local to remote", "node", p.NodeId)
 		err = request.Write(broker)
 		if err != nil {
-			fmt.Printf("-> Failed to echo bytes for node %d: %v\n", p.NodeId, err)
+			slog.Error("-> Failed to echo bytes", "node", p.NodeId, "error", err)
 			break
 		}
 	}
