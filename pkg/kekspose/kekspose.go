@@ -27,6 +27,7 @@ import (
 	"strings"
 	"syscall"
 
+	keks2 "github.com/scholzj/kekspose/pkg/kekspose/keks"
 	"github.com/scholzj/kekspose/pkg/kekspose/proksy"
 	strimzi "github.com/scholzj/strimzi-go/pkg/client/clientset/versioned"
 	"k8s.io/client-go/kubernetes"
@@ -96,7 +97,7 @@ func (k *Kekspose) ExposeKafka() {
 	}
 
 	// Get Kafka cluster details
-	keks, err := bakeKeks(strimziclient, k.Namespace, k.ClusterName, k.ListenerName)
+	keks, err := keks2.BakeKeks(strimziclient, k.Namespace, k.ClusterName, k.ListenerName)
 	if err != nil {
 		slog.Error("Failed to find the Kafka cluster with a suitable listener", "error", err)
 		return
@@ -115,7 +116,7 @@ func (k *Kekspose) ExposeKafka() {
 	// Start forwarders
 	for _, pf := range portForwarders {
 		id := pf.Proxy.NodeId
-		slog.Info("Starting port forwarding between localhost and Kubernetes", "localPort", portMapping[id], "podName", keks.Nodes[id], "remotePort", keks.Port, "namespace", keks.Namespace)
+		slog.Info("Starting port forwarding between localhost and Kubernetes", "localPort", portMapping[id], "podName", keks.Nodes[id], "remotePort", keks.Port, "namespace", k.Namespace)
 
 		go pf.ForwardPorts()
 	}
@@ -138,7 +139,7 @@ func (k *Kekspose) ExposeKafka() {
 		// Stopping port forwarders
 		for _, pf := range portForwarders {
 			id := pf.Proxy.NodeId
-			slog.Info("Stopping port forwarding between localhost and Kubernetes", "localPort", portMapping[id], "podName", keks.Nodes[id], "remotePort", keks.Port, "namespace", keks.Namespace)
+			slog.Info("Stopping port forwarding between localhost and Kubernetes", "localPort", portMapping[id], "podName", keks.Nodes[id], "remotePort", keks.Port, "namespace", k.Namespace)
 			close(pf.Stop)
 		}
 		close(shutdown)
@@ -155,7 +156,7 @@ func (k *Kekspose) ExposeKafka() {
 	}
 }
 
-func (k *Kekspose) preparePortMapping(keks *Keks) map[int32]uint32 {
+func (k *Kekspose) preparePortMapping(keks *keks2.Keks) map[int32]uint32 {
 	portMapping := make(map[int32]uint32)
 	nextPort := k.StartingPort
 
@@ -173,7 +174,7 @@ func (k *Kekspose) preparePortMapping(keks *Keks) map[int32]uint32 {
 	return portMapping
 }
 
-func (k *Kekspose) preparePortForwarders(kubeconfig *rest.Config, kubeclient *kubernetes.Clientset, keks *Keks, portMapping map[int32]uint32) []*PortForwarder {
+func (k *Kekspose) preparePortForwarders(kubeconfig *rest.Config, kubeclient *kubernetes.Clientset, keks *keks2.Keks, portMapping map[int32]uint32) []*PortForwarder {
 	portForwarders := make([]*PortForwarder, 0, len(keks.Nodes))
 
 	nodeIds := make([]int32, 0, len(keks.Nodes))
@@ -184,7 +185,7 @@ func (k *Kekspose) preparePortForwarders(kubeconfig *rest.Config, kubeclient *ku
 
 	for _, nodeId := range nodeIds {
 		node := keks.Nodes[nodeId]
-		portForwarder := NewPortForwarder(kubeconfig, kubeclient, keks.Namespace, node, portMapping[nodeId], keks.Port, proksy.NewProksy(nodeId, portMapping))
+		portForwarder := NewPortForwarder(kubeconfig, kubeclient, k.Namespace, node, portMapping[nodeId], keks.Port, proksy.NewProksy(nodeId, portMapping))
 		portForwarders = append(portForwarders, portForwarder)
 	}
 

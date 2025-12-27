@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package kekspose
+package keks
 
 import (
 	"context"
@@ -29,12 +29,11 @@ import (
 )
 
 type Keks struct {
-	Namespace string
-	Nodes     map[int32]string
-	Port      uint32
+	Nodes map[int32]string
+	Port  uint32
 }
 
-func bakeKeks(strimzi strimziclient.Interface, namespace string, clusterName string, listenerName string) (*Keks, error) {
+func BakeKeks(strimzi strimziclient.Interface, namespace string, clusterName string, listenerName string) (*Keks, error) {
 	kafka, err := findKafka(strimzi, namespace, clusterName)
 	if err != nil {
 		return nil, err
@@ -51,9 +50,8 @@ func bakeKeks(strimzi strimziclient.Interface, namespace string, clusterName str
 	}
 
 	keks := &Keks{
-		Namespace: namespace,
-		Port:      port,
-		Nodes:     nodes,
+		Port:  port,
+		Nodes: nodes,
 	}
 
 	return keks, nil

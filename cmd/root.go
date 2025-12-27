@@ -39,7 +39,7 @@ var rootCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		switch verbose {
 		case 0:
-		// Nothing
+			// Nothing
 		case 1:
 			slog.SetLogLoggerLevel(slog.LevelDebug)
 		}
