@@ -14,12 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package kekspose
+package keks
 
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"slices"
 	"strings"
 
@@ -29,48 +29,36 @@ import (
 )
 
 type Keks struct {
-	BootstrapAddress string
-	NodeIDs          []int32
+	Nodes map[int32]string
+	Port  uint32
 }
 
-func (k *Keks) highestNodeId() int32 {
-	var highestNodeId int32
-
-	for _, nodeId := range k.NodeIDs {
-		if nodeId > highestNodeId {
-			highestNodeId = nodeId
-		}
-	}
-
-	return highestNodeId
-}
-
-func bakeKeks(client strimziclient.Interface, namespace string, clusterName string, listenerName string) (*Keks, error) {
-	kafka, err := findKafka(client, namespace, clusterName)
+func BakeKeks(strimzi strimziclient.Interface, namespace string, clusterName string, listenerName string) (*Keks, error) {
+	kafka, err := findKafka(strimzi, namespace, clusterName)
 	if err != nil {
 		return nil, err
 	}
 
-	bootstrapAddress, err := findBootstrapAddress(kafka, clusterName, listenerName)
+	port, err := findPort(kafka, listenerName)
 	if err != nil {
 		return nil, err
 	}
 
-	nodes, err := findNodes(client, kafka)
+	nodes, err := findNodes(strimzi, kafka)
 	if err != nil {
 		return nil, err
 	}
 
 	keks := &Keks{
-		BootstrapAddress: *bootstrapAddress,
-		NodeIDs:          nodes,
+		Port:  port,
+		Nodes: nodes,
 	}
 
 	return keks, nil
 }
 
-func findKafka(client strimziclient.Interface, namespace string, clusterName string) (*strimziapi.Kafka, error) {
-	kafka, err := client.KafkaV1beta2().Kafkas(namespace).Get(context.TODO(), clusterName, v1.GetOptions{})
+func findKafka(strimzi strimziclient.Interface, namespace string, clusterName string) (*strimziapi.Kafka, error) {
+	kafka, err := strimzi.KafkaV1beta2().Kafkas(namespace).Get(context.TODO(), clusterName, v1.GetOptions{})
 	if err != nil {
 		if !strings.Contains(err.Error(), "not found") {
 			//goland:noinspection GoErrorStringFormat
@@ -85,7 +73,7 @@ func findKafka(client strimziclient.Interface, namespace string, clusterName str
 		return nil, fmt.Errorf("Kafka cluster %s in namespace %s was found, but it is not ready", clusterName, namespace)
 	}
 
-	log.Printf("Found Kafka cluster %s in namespace %s", clusterName, namespace)
+	slog.Info("Found Kafka cluster", "name", clusterName, "namespace", namespace)
 
 	return kafka, nil
 }
@@ -104,44 +92,34 @@ func isKafkaReady(kafka *strimziapi.Kafka) bool {
 	}
 }
 
-func findBootstrapAddress(kafka *strimziapi.Kafka, clusterName string, listenerName string) (*string, error) {
+func findPort(kafka *strimziapi.Kafka, listenerName string) (uint32, error) {
 	var listener *strimziapi.GenericKafkaListener
 	var err error
+
 	if listenerName != "" {
 		listener, err = findListenerByName(kafka, listenerName)
 		if err != nil {
-			return nil, err
+			return 0, err
 		}
 	} else {
 		listener, err = findFirstUnencryptedListener(kafka)
 		if err != nil {
-			return nil, err
+			return 0, err
 		}
 	}
 
 	if listener == nil {
-		return nil, fmt.Errorf("failed to find listener")
+		return 0, fmt.Errorf("failed to find listener")
 	}
 
-	var bootstrapAddress string
-	if listener.Port == 9092 && listener.Name == "plain" && listener.Type == strimziapi.INTERNAL_KAFKALISTENERTYPE {
-		bootstrapAddress = fmt.Sprintf("%s-kafka-bootstrap:%d", clusterName, listener.Port)
-	} else if listener.Port == 9093 && listener.Name == "tls" && listener.Type == strimziapi.INTERNAL_KAFKALISTENERTYPE {
-		bootstrapAddress = fmt.Sprintf("%s-kafka-bootstrap:%d", clusterName, listener.Port)
-	} else if listener.Port == 9094 && listener.Name == "external" {
-		bootstrapAddress = fmt.Sprintf("%s-kafka-external-bootstrap:%d", clusterName, listener.Port)
-	} else {
-		bootstrapAddress = fmt.Sprintf("%s-kafka-%s-bootstrap:%d", clusterName, listener.Name, listener.Port)
-	}
-
-	log.Printf("Bootstrap address %s will be used", bootstrapAddress)
-	return &bootstrapAddress, nil
+	slog.Info("Found suitable port", "port", listener.Port, "listener", listener.Name)
+	return uint32(listener.Port), nil
 }
 
 func findFirstUnencryptedListener(kafka *strimziapi.Kafka) (*strimziapi.GenericKafkaListener, error) {
 	for _, listener := range kafka.Spec.Kafka.Listeners {
 		if !listener.Tls {
-			log.Printf("Found listener %s without TLS encryption", listener.Name)
+			slog.Info("Found suitable listener without TLS encryption", "listener", listener.Name)
 			return &listener, nil
 		}
 	}
@@ -167,12 +145,12 @@ func findListenerByName(kafka *strimziapi.Kafka, listenerName string) (*strimzia
 	return nil, fmt.Errorf("Kafka listener with name %s was not found", listenerName)
 }
 
-func findNodes(client strimziclient.Interface, kafka *strimziapi.Kafka) ([]int32, error) {
+func findNodes(strimzi strimziclient.Interface, kafka *strimziapi.Kafka) (map[int32]string, error) {
 	if len(kafka.Annotations) > 0 && kafka.Annotations["strimzi.io/node-pools"] == "enabled" {
-		log.Printf("Node Pools are enabled -> getting node IDs from their status")
-		var nodeIds []int32
+		slog.Debug("Node Pools are enabled -> calculating nodes from their status")
+		nodes := make(map[int32]string)
 
-		nodePools, err := client.KafkaV1beta2().KafkaNodePools(kafka.Namespace).List(context.TODO(), v1.ListOptions{LabelSelector: "strimzi.io/cluster=" + kafka.Name})
+		nodePools, err := strimzi.KafkaV1beta2().KafkaNodePools(kafka.Namespace).List(context.TODO(), v1.ListOptions{LabelSelector: "strimzi.io/cluster=" + kafka.Name})
 		if err != nil {
 			return nil, fmt.Errorf("failed to list Kafka Node Pools: %v", err)
 		}
@@ -180,22 +158,24 @@ func findNodes(client strimziclient.Interface, kafka *strimziapi.Kafka) ([]int32
 		for _, nodePool := range nodePools.Items {
 			if slices.Contains(nodePool.Spec.Roles, strimziapi.BROKER_PROCESSROLES) {
 				if nodePool.Status != nil && len(nodePool.Status.NodeIds) > 0 {
-					nodeIds = append(nodeIds, nodePool.Status.NodeIds...)
+					for _, nodeId := range nodePool.Status.NodeIds {
+						nodes[nodeId] = fmt.Sprintf("%s-%s-%d", kafka.Name, nodePool.Name, nodeId)
+					}
 				}
 			}
 		}
 
-		log.Printf("Found nodes (in broker node pools) with following IDs: %v", nodeIds)
-		return nodeIds, nil
+		slog.Info("Found Kafka nodes", "nodes", nodes)
+		return nodes, nil
 	} else {
-		log.Printf("Node Pools not enabled -> calculating node IDs for %d replicas", kafka.Spec.Kafka.Replicas)
-		nodeIds := make([]int32, *kafka.Spec.Kafka.Replicas)
+		slog.Debug("Node Pools not enabled -> calculating node IDs", "replicas", kafka.Spec.Kafka.Replicas)
+		nodes := make(map[int32]string)
 
 		for i := int32(0); i < *kafka.Spec.Kafka.Replicas; i++ {
-			nodeIds[i] = i
+			nodes[i] = fmt.Sprintf("%s-kafka-%d", kafka.Name, i)
 		}
 
-		log.Printf("Generated nodes with following IDs: %v", nodeIds)
-		return nodeIds, nil
+		slog.Info("Found Kafka nodes", "nodes", nodes)
+		return nodes, nil
 	}
 }

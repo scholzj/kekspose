@@ -1,4 +1,4 @@
-package kekspose
+package keks
 
 import (
 	"context"
@@ -41,11 +41,10 @@ func TestZooBasedCluster(t *testing.T) {
 	_, err := client.KafkaV1beta2().Kafkas("my-namespace").Create(context.TODO(), kafka, metav1.CreateOptions{})
 	assert.Nil(t, err)
 
-	keks, err := bakeKeks(client, "my-namespace", "my-cluster", "plain")
+	keks, err := BakeKeks(client, "my-namespace", "my-cluster", "plain")
 	assert.Nil(t, err)
-	assert.Equal(t, "my-cluster-kafka-bootstrap:9092", keks.BootstrapAddress)
-	assert.Equal(t, []int32{0, 1, 2}, keks.NodeIDs)
-	assert.Equal(t, int32(2), keks.highestNodeId())
+	assert.Equal(t, map[int32]string{0: "my-cluster-kafka-0", 1: "my-cluster-kafka-1", 2: "my-cluster-kafka-2"}, keks.Nodes)
+	assert.Equal(t, uint32(9092), keks.Port)
 }
 
 func TestNodePoolBasedCluster(t *testing.T) {
@@ -166,11 +165,10 @@ func TestNodePoolBasedCluster(t *testing.T) {
 	_, err = client.KafkaV1beta2().KafkaNodePools("my-namespace").Create(context.TODO(), nodePool3, metav1.CreateOptions{})
 	assert.Nil(t, err)
 
-	keks, err := bakeKeks(client, "my-namespace", "my-cluster", "plain")
+	keks, err := BakeKeks(client, "my-namespace", "my-cluster", "plain")
 	assert.Nil(t, err)
-	assert.Equal(t, "my-cluster-kafka-bootstrap:9092", keks.BootstrapAddress)
-	assert.Equal(t, []int32{0, 1, 2, 100, 101, 102}, keks.NodeIDs)
-	assert.Equal(t, int32(102), keks.highestNodeId())
+	assert.Equal(t, map[int32]string{0: "my-cluster-pool-a-0", 1: "my-cluster-pool-a-1", 2: "my-cluster-pool-a-2", 100: "my-cluster-pool-b-100", 101: "my-cluster-pool-b-101", 102: "my-cluster-pool-b-102"}, keks.Nodes)
+	assert.Equal(t, uint32(9092), keks.Port)
 }
 
 func TestUnreadyCluster(t *testing.T) {
@@ -198,7 +196,7 @@ func TestUnreadyCluster(t *testing.T) {
 	_, err := client.KafkaV1beta2().Kafkas("my-namespace").Create(context.TODO(), kafka, metav1.CreateOptions{})
 	assert.Nil(t, err)
 
-	keks, err := bakeKeks(client, "my-namespace", "my-cluster", "internal")
+	keks, err := BakeKeks(client, "my-namespace", "my-cluster", "internal")
 	assert.NotNil(t, err)
 	assert.Equal(t, "Kafka cluster my-cluster in namespace my-namespace was found, but it is not ready", err.Error())
 	assert.Nil(t, keks)
@@ -241,13 +239,13 @@ func TestNoTlsListener(t *testing.T) {
 	assert.Nil(t, err)
 
 	// Without specified listener
-	keks, err := bakeKeks(client, "my-namespace", "my-cluster", "")
+	keks, err := BakeKeks(client, "my-namespace", "my-cluster", "")
 	assert.NotNil(t, err)
 	assert.Equal(t, "no Kafka listener without TLS encryption found", err.Error())
 	assert.Nil(t, keks)
 
 	// With specified listener
-	keks, err = bakeKeks(client, "my-namespace", "my-cluster", "tls")
+	keks, err = BakeKeks(client, "my-namespace", "my-cluster", "tls")
 	assert.NotNil(t, err)
 	assert.Equal(t, "Kafka listener with name tls exists, but has unsupported configuration (TLS encryption is enabled)", err.Error())
 	assert.Nil(t, keks)
@@ -289,61 +287,8 @@ func TestNonExistentListener(t *testing.T) {
 	_, err := client.KafkaV1beta2().Kafkas("my-namespace").Create(context.TODO(), kafka, metav1.CreateOptions{})
 	assert.Nil(t, err)
 
-	keks, err := bakeKeks(client, "my-namespace", "my-cluster", "plain")
+	keks, err := BakeKeks(client, "my-namespace", "my-cluster", "plain")
 	assert.NotNil(t, err)
 	assert.Equal(t, "Kafka listener with name plain was not found", err.Error())
 	assert.Nil(t, keks)
-}
-
-func TestBootstrapAddresses(t *testing.T) {
-	replicas := int32(3)
-	kafka := &kafkav1beta2.Kafka{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "my-cluster",
-			Namespace: "my-namespace",
-		},
-		Spec: &kafkav1beta2.KafkaSpec{
-			Kafka: &kafkav1beta2.KafkaClusterSpec{
-				Version:  "3.9.0",
-				Replicas: &replicas,
-				Listeners: []kafkav1beta2.GenericKafkaListener{{
-					Name: "plain",
-					Type: kafkav1beta2.INTERNAL_KAFKALISTENERTYPE,
-					Tls:  false,
-					Port: 9092,
-				}, {
-					Name: "tls",
-					Type: kafkav1beta2.INTERNAL_KAFKALISTENERTYPE,
-					Tls:  false,
-					Port: 9093,
-				}, {
-					Name: "external",
-					Type: kafkav1beta2.LOADBALANCER_KAFKALISTENERTYPE,
-					Tls:  false,
-					Port: 9094,
-				}, {
-					Name: "other",
-					Type: kafkav1beta2.INTERNAL_KAFKALISTENERTYPE,
-					Tls:  false,
-					Port: 9095,
-				}},
-			},
-		},
-	}
-
-	address, err := findBootstrapAddress(kafka, "my-cluster", "plain")
-	assert.Nil(t, err)
-	assert.Equal(t, "my-cluster-kafka-bootstrap:9092", *address)
-
-	address, err = findBootstrapAddress(kafka, "my-cluster", "tls")
-	assert.Nil(t, err)
-	assert.Equal(t, "my-cluster-kafka-bootstrap:9093", *address)
-
-	address, err = findBootstrapAddress(kafka, "my-cluster", "external")
-	assert.Nil(t, err)
-	assert.Equal(t, "my-cluster-kafka-external-bootstrap:9094", *address)
-
-	address, err = findBootstrapAddress(kafka, "my-cluster", "other")
-	assert.Nil(t, err)
-	assert.Equal(t, "my-cluster-kafka-other-bootstrap:9095", *address)
 }

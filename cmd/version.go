@@ -18,7 +18,7 @@ package cmd
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"runtime/debug"
 
 	"github.com/spf13/cobra"
@@ -32,7 +32,7 @@ var versionCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		buildInfo, ok := debug.ReadBuildInfo()
 		if !ok {
-			log.Fatalf("Failed to get Keksposé version information")
+			slog.Error("Failed to get Keksposé version information")
 		} else {
 			fmt.Println("Keksposé version:", buildInfo.Main.Version)
 			fmt.Println("Go version:", buildInfo.GoVersion)

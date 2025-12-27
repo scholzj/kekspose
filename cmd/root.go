@@ -17,10 +17,10 @@ limitations under the License.
 package cmd
 
 import (
+	"log/slog"
 	"os"
 
-	kekspose2 "github.com/scholzj/kekspose/pkg/kekspose"
-
+	"github.com/scholzj/kekspose/pkg/kekspose"
 	"github.com/spf13/cobra"
 )
 
@@ -28,10 +28,8 @@ var kubeconfigpath string
 var namespace string
 var clusterName string
 var listenerName string
-var keksposeName string
-var proxyImage string
-var startingPort uint16
-var timeout uint32
+var startingPort uint32
+var verbose int
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -39,15 +37,21 @@ var rootCmd = &cobra.Command{
 	Short: "Expose your Kafka cluster outside your Minikube, Kind, or Docker Desktop clusters",
 	Long:  `Expose your Kafka cluster outside your Minikube, Kind, or Docker Desktop clusters`,
 	Run: func(cmd *cobra.Command, args []string) {
-		kekspose := kekspose2.Kekspose{
+		// Configure the logging
+		if verbose <= 0 {
+			slog.SetLogLoggerLevel(slog.LevelInfo)
+		} else if verbose == 1 {
+			slog.SetLogLoggerLevel(slog.LevelDebug)
+		} else {
+			slog.SetLogLoggerLevel(slog.Level(-10))
+		}
+
+		kekspose := kekspose.Kekspose{
 			KubeConfigPath: kubeconfigpath,
 			Namespace:      namespace,
 			ClusterName:    clusterName,
 			ListenerName:   listenerName,
-			KeksposeName:   keksposeName,
-			ProxyImage:     proxyImage,
 			StartingPort:   startingPort,
-			Timeout:        timeout,
 		}
 		kekspose.ExposeKafka()
 	},
@@ -75,8 +79,6 @@ func init() {
 	rootCmd.Flags().StringVarP(&namespace, "namespace", "n", "", "Namespace of the Kafka cluster.")
 	rootCmd.Flags().StringVarP(&clusterName, "cluster-name", "c", "my-cluster", "Name of the Kafka cluster.")
 	rootCmd.Flags().StringVarP(&listenerName, "listener-name", "l", "", "Name of the listener that should be exposed.")
-	rootCmd.Flags().StringVarP(&keksposeName, "kekspose-name", "k", "kekspose", "Name that will be used for the Keksposé ConfigMap and Pod.")
-	rootCmd.Flags().StringVarP(&proxyImage, "proxy-image", "i", "ghcr.io/scholzj/kekspose:kroxylicious-0.18.0", "Container image used for the proxy (must be based on a compatible Kroxylicious container image).")
-	rootCmd.Flags().Uint16VarP(&startingPort, "starting-port", "p", 50000, "The starting port number. This port number will be used for the bootstrap connection and will be used as the basis to calculate the per-broker ports.")
-	rootCmd.Flags().Uint32VarP(&timeout, "timeout", "t", 300000, "Timeout for how long to wait for the Proxy Pod to become ready. In milliseconds.")
+	rootCmd.Flags().Uint32VarP(&startingPort, "starting-port", "p", 50000, "The starting port number. This port number will be used for the bootstrap connection and will be used as the basis to calculate the per-broker ports.")
+	rootCmd.Flags().CountVarP(&verbose, "verbose", "v", "Enables verbose logging (can be repeated: -v, -vv, -vvv).")
 }
