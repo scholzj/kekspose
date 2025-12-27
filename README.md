@@ -57,6 +57,8 @@ flowchart LR
 Kekspose is written in Golang using the [Strimzi Go APIs](https://github.com/scholzj/strimzi-go).
 That allows it to provide native binaries to make it easier to run Keksposé.
 
+_Note: For the previous version based on the Kroxylicious proxy, see the [0.6.x release branch](https://github.com/scholzj/kekspose/tree/release-0.6.x) and use one of the 0.6.x releases._
+
 ## How to use Keksposé?
 
 ### Installation
