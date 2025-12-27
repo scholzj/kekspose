@@ -83,7 +83,7 @@ If you are using the Keksposé binary, you can pass the options from the command
 
 ### Debugging Kafka clients
 
-In the verbose mode (`-v` or `--verbose`), Kekspsé will log high level information about the request and repsonses it is forwarding.
+In the verbose mode (`-v` or `--verbose`), Keksposé will log high level information about the request and responses it is forwarding.
 For example:
 ```
 -> Received request: node=2000; size=52; apiKey=1; version=17; correlationID=694; clientId=console-consumer; bodySize=26 bytes
@@ -92,7 +92,7 @@ For example:
 
 You can further increase the verbosity by using an extra verbose mode `-vv`.
 This will in addition dump the content of the request and response bodies.
-However, at this point, only the ApiVersions, Metadata, and FIndCoordinator requests and responses are supported 🫣. 
+However, at this point, only the ApiVersions, Metadata, and FindCoordinator requests and responses are supported 🫣. 
 
 ## Frequently Asked Questions
 

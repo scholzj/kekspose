@@ -276,7 +276,7 @@ func (pf *ProxiedForwarder) listenOnPort(port *ProxiedPort) error {
 }
 
 // listenOnPortAndAddress delegates listener creation and waits for new connections
-// in the background f
+// in the background
 func (pf *ProxiedForwarder) listenOnPortAndAddress(port *ProxiedPort, protocol string, address string) error {
 	listener, err := pf.getListener(protocol, address, port)
 	if err != nil {

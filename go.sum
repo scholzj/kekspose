@@ -91,6 +91,8 @@ github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2/go.mod h1:iKH
 github.com/rogpeppe/go-internal v1.13.1 h1:KvO1DLK/DRN07sQ1LQKScxyZJuNnedQ5/wKSR38lUII=
 github.com/rogpeppe/go-internal v1.13.1/go.mod h1:uMEvuHeurkdAXX61udpOXGD/AzZDWNMNyH2VO9fmH0o=
 github.com/russross/blackfriday/v2 v2.1.0/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
+github.com/scholzj/go-kafka-protocol v0.0.1 h1:DXaVfboTBMHsYjgA3XPtOiR6bO4TvmhMVNDhUCOdmQc=
+github.com/scholzj/go-kafka-protocol v0.0.1/go.mod h1:5A/liM02deqyur7XYmBFQu/ETZACtSLrETJDQlvDJL4=
 github.com/scholzj/strimzi-go v0.6.0 h1:DEvIy9/00q1r83eSSKZVGeDx/UMKcNPMsaWtAAzdfLk=
 github.com/scholzj/strimzi-go v0.6.0/go.mod h1:fO//Ti6/rrsC0dbQ09iNsy4Rf5yHcH4pt6VXioKJaQY=
 github.com/spf13/cobra v1.10.2 h1:DMTTonx5m65Ic0GOoRY2c16WCbHxOOw6xxezuLaBpcU=

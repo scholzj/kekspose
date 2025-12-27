@@ -3,7 +3,7 @@ module github.com/scholzj/kekspose
 go 1.24.0
 
 require (
-	github.com/scholzj/go-kafka-protocol v0.0.0-20251209142117-ec2077762ea1
+	github.com/scholzj/go-kafka-protocol v0.0.1
 	github.com/scholzj/strimzi-go v0.6.0
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
@@ -12,8 +12,6 @@ require (
 	k8s.io/client-go v0.34.3
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
 )
-
-replace github.com/scholzj/go-kafka-protocol => ../go-kafka-protocol2
 
 require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect

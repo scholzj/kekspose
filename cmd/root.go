@@ -37,12 +37,7 @@ var rootCmd = &cobra.Command{
 	Short: "Expose your Kafka cluster outside your Minikube, Kind, or Docker Desktop clusters",
 	Long:  `Expose your Kafka cluster outside your Minikube, Kind, or Docker Desktop clusters`,
 	Run: func(cmd *cobra.Command, args []string) {
-		switch verbose {
-		case 0:
-			// Nothing
-		case 1:
-			slog.SetLogLoggerLevel(slog.LevelDebug)
-		}
+		// Configure the logging
 		if verbose <= 0 {
 			slog.SetLogLoggerLevel(slog.LevelInfo)
 		} else if verbose == 1 {

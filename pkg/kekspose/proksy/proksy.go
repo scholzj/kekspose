@@ -186,7 +186,7 @@ func (p *Proksy) ClientToBroker(client net.Conn, broker httpstream.Stream, shutd
 			metadataRequest := metadata.MetadataRequest{}
 			err := metadataRequest.Read(request)
 			if err != nil {
-				slog.Error("Failed to decode ApiVersions request", "error", err)
+				slog.Error("Failed to decode Metadata request", "error", err)
 			}
 
 			slog.Log(context.Background(), TraceLevel, metadataRequest.PrettyPrint())
