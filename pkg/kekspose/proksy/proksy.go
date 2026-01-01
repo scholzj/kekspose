@@ -8,6 +8,7 @@ import (
 	"net"
 
 	"github.com/scholzj/go-kafka-protocol/api/apiversions"
+	"github.com/scholzj/go-kafka-protocol/api/describecluster"
 	"github.com/scholzj/go-kafka-protocol/api/findcoordinator"
 	"github.com/scholzj/go-kafka-protocol/api/metadata"
 	"github.com/scholzj/go-kafka-protocol/protocol"
@@ -66,7 +67,7 @@ func (p *Proksy) BrokerToClient(client net.Conn, broker httpstream.Stream, shutd
 			}
 
 			for i := range *metadataResponse.Brokers {
-				(*metadataResponse.Brokers)[i].Host = "localhost"
+				(*metadataResponse.Brokers)[i].Host = ptr.To("localhost")
 				(*metadataResponse.Brokers)[i].Port = int32(p.PortMapping[(*metadataResponse.Brokers)[i].NodeId])
 			}
 
@@ -117,6 +118,28 @@ func (p *Proksy) BrokerToClient(client net.Conn, broker httpstream.Stream, shutd
 			err = apiVersions.Write(buf)
 			if err != nil {
 				slog.Error("<- Failed to re-encode ApiVersions response", "node", p.NodeId, "error", err)
+			}
+			response.Body = buf
+		} else if response.ApiKey == 60 {
+			describeCluster := describecluster.DescribeClusterResponse{}
+			err := describeCluster.Read(response)
+			if err != nil {
+				slog.Error("<- Failed to decode DescribeCluster response", "node", p.NodeId, "error", err)
+			}
+
+			if describeCluster.EndpointType == 1 && describeCluster.Brokers != nil {
+				for i := range *describeCluster.Brokers {
+					(*describeCluster.Brokers)[i].Host = ptr.To("localhost")
+					(*describeCluster.Brokers)[i].Port = int32(p.PortMapping[(*describeCluster.Brokers)[i].BrokerId])
+				}
+			}
+
+			slog.Log(context.Background(), TraceLevel, describeCluster.PrettyPrint())
+
+			buf := bytes.NewBuffer(make([]byte, 0))
+			err = describeCluster.Write(buf)
+			if err != nil {
+				slog.Error("<- Failed to re-encode DescribeCluster response", "node", p.NodeId, "error", err)
 			}
 			response.Body = buf
 		}
