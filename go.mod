@@ -3,7 +3,7 @@ module github.com/scholzj/kekspose
 go 1.24.0
 
 require (
-	github.com/scholzj/go-kafka-protocol v0.0.1
+	github.com/scholzj/go-kafka-protocol v0.0.2
 	github.com/scholzj/strimzi-go v0.6.0
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
