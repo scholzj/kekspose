@@ -9,8 +9,12 @@ import (
 
 	"github.com/scholzj/go-kafka-protocol/api/apiversions"
 	"github.com/scholzj/go-kafka-protocol/api/describecluster"
+	"github.com/scholzj/go-kafka-protocol/api/fetch"
 	"github.com/scholzj/go-kafka-protocol/api/findcoordinator"
 	"github.com/scholzj/go-kafka-protocol/api/metadata"
+	"github.com/scholzj/go-kafka-protocol/api/produce"
+	"github.com/scholzj/go-kafka-protocol/api/shareacknowledge"
+	"github.com/scholzj/go-kafka-protocol/api/sharefetch"
 	"github.com/scholzj/go-kafka-protocol/protocol"
 	"k8s.io/apimachinery/pkg/util/httpstream"
 	"k8s.io/utils/ptr"
@@ -58,7 +62,55 @@ func (p *Proksy) BrokerToClient(client net.Conn, broker httpstream.Stream, shutd
 		slog.Debug("<- Received response", "node", p.NodeId, "size", response.Size, "apiKey", response.ApiKey, "apiVersion", response.ApiVersion, "correlationId", response.CorrelationId, "clientId", *response.ClientId, "bodySize", response.Body.Len())
 		delete(correlations, response.CorrelationId)
 
-		if response.ApiKey == 3 {
+		if response.ApiKey == 0 {
+			produceResponse := produce.ProduceResponse{}
+			err := produceResponse.Read(response)
+			if err != nil {
+				slog.Error("<- Failed to decode Produce response", "node", p.NodeId, "error", err)
+				break
+			}
+
+			if produceResponse.NodeEndpoints != nil {
+				for i := range *produceResponse.NodeEndpoints {
+					(*produceResponse.NodeEndpoints)[i].Host = ptr.To("localhost")
+					(*produceResponse.NodeEndpoints)[i].Port = int32(p.PortMapping[(*produceResponse.NodeEndpoints)[i].NodeId])
+				}
+			}
+
+			slog.Log(context.Background(), TraceLevel, produceResponse.PrettyPrint())
+
+			buf := bytes.NewBuffer(make([]byte, 0))
+			err = produceResponse.Write(buf)
+			if err != nil {
+				slog.Error("<- Failed to re-encode Produce response", "node", p.NodeId, "error", err)
+				break
+			}
+			response.Body = buf
+		} else if response.ApiKey == 1 {
+			fetchResponse := fetch.FetchResponse{}
+			err := fetchResponse.Read(response)
+			if err != nil {
+				slog.Error("<- Failed to decode Fetch response", "node", p.NodeId, "error", err)
+				break
+			}
+
+			if fetchResponse.NodeEndpoints != nil {
+				for i := range *fetchResponse.NodeEndpoints {
+					(*fetchResponse.NodeEndpoints)[i].Host = ptr.To("localhost")
+					(*fetchResponse.NodeEndpoints)[i].Port = int32(p.PortMapping[(*fetchResponse.NodeEndpoints)[i].NodeId])
+				}
+			}
+
+			slog.Log(context.Background(), TraceLevel, fetchResponse.PrettyPrint())
+
+			buf := bytes.NewBuffer(make([]byte, 0))
+			err = fetchResponse.Write(buf)
+			if err != nil {
+				slog.Error("<- Failed to re-encode Fetch response", "node", p.NodeId, "error", err)
+				break
+			}
+			response.Body = buf
+		} else if response.ApiKey == 3 {
 			metadataResponse := metadata.MetadataResponse{}
 			err := metadataResponse.Read(response)
 			if err != nil {
@@ -106,40 +158,84 @@ func (p *Proksy) BrokerToClient(client net.Conn, broker httpstream.Stream, shutd
 			}
 			response.Body = buf
 		} else if response.ApiKey == 18 {
-			apiVersions := apiversions.ApiVersionsResponse{}
-			err := apiVersions.Read(response)
+			apiVersionsResponse := apiversions.ApiVersionsResponse{}
+			err := apiVersionsResponse.Read(response)
 			if err != nil {
 				slog.Error("<- Failed to decode ApiVersions response", "node", p.NodeId, "error", err)
 			}
 
-			slog.Log(context.Background(), TraceLevel, apiVersions.PrettyPrint())
+			slog.Log(context.Background(), TraceLevel, apiVersionsResponse.PrettyPrint())
 
 			buf := bytes.NewBuffer(make([]byte, 0))
-			err = apiVersions.Write(buf)
+			err = apiVersionsResponse.Write(buf)
 			if err != nil {
 				slog.Error("<- Failed to re-encode ApiVersions response", "node", p.NodeId, "error", err)
 			}
 			response.Body = buf
 		} else if response.ApiKey == 60 {
-			describeCluster := describecluster.DescribeClusterResponse{}
-			err := describeCluster.Read(response)
+			describeClusterResponse := describecluster.DescribeClusterResponse{}
+			err := describeClusterResponse.Read(response)
 			if err != nil {
 				slog.Error("<- Failed to decode DescribeCluster response", "node", p.NodeId, "error", err)
 			}
 
-			if describeCluster.EndpointType == 1 && describeCluster.Brokers != nil {
-				for i := range *describeCluster.Brokers {
-					(*describeCluster.Brokers)[i].Host = ptr.To("localhost")
-					(*describeCluster.Brokers)[i].Port = int32(p.PortMapping[(*describeCluster.Brokers)[i].BrokerId])
+			if describeClusterResponse.EndpointType == 1 && describeClusterResponse.Brokers != nil {
+				for i := range *describeClusterResponse.Brokers {
+					(*describeClusterResponse.Brokers)[i].Host = ptr.To("localhost")
+					(*describeClusterResponse.Brokers)[i].Port = int32(p.PortMapping[(*describeClusterResponse.Brokers)[i].BrokerId])
 				}
 			}
 
-			slog.Log(context.Background(), TraceLevel, describeCluster.PrettyPrint())
+			slog.Log(context.Background(), TraceLevel, describeClusterResponse.PrettyPrint())
 
 			buf := bytes.NewBuffer(make([]byte, 0))
-			err = describeCluster.Write(buf)
+			err = describeClusterResponse.Write(buf)
 			if err != nil {
 				slog.Error("<- Failed to re-encode DescribeCluster response", "node", p.NodeId, "error", err)
+			}
+			response.Body = buf
+		} else if response.ApiKey == 78 {
+			shareFetchResponse := sharefetch.ShareFetchResponse{}
+			err := shareFetchResponse.Read(response)
+			if err != nil {
+				slog.Error("<- Failed to decode ShareFetch response", "node", p.NodeId, "error", err)
+			}
+
+			if shareFetchResponse.NodeEndpoints != nil {
+				for i := range *shareFetchResponse.NodeEndpoints {
+					(*shareFetchResponse.NodeEndpoints)[i].Host = ptr.To("localhost")
+					(*shareFetchResponse.NodeEndpoints)[i].Port = int32(p.PortMapping[(*shareFetchResponse.NodeEndpoints)[i].NodeId])
+				}
+			}
+
+			slog.Log(context.Background(), TraceLevel, shareFetchResponse.PrettyPrint())
+
+			buf := bytes.NewBuffer(make([]byte, 0))
+			err = shareFetchResponse.Write(buf)
+			if err != nil {
+				slog.Error("<- Failed to re-encode ShareFetch response", "node", p.NodeId, "error", err)
+			}
+			response.Body = buf
+		} else if response.ApiKey == 79 {
+			shareAcknowledgeResponse := shareacknowledge.ShareAcknowledgeResponse{}
+			err := shareAcknowledgeResponse.Read(response)
+			if err != nil {
+				slog.Error("<- Failed to decode ShareAcknowledge response", "node", p.NodeId, "error", err)
+			}
+
+			if shareAcknowledgeResponse.NodeEndpoints != nil {
+				for i := range *shareAcknowledgeResponse.NodeEndpoints {
+					(*shareAcknowledgeResponse.NodeEndpoints)[i].Host = ptr.To("localhost")
+					(*shareAcknowledgeResponse.NodeEndpoints)[i].Port = int32(p.PortMapping[(*shareAcknowledgeResponse.NodeEndpoints)[i].NodeId])
+				}
+			}
+
+			slog.Log(context.Background(), TraceLevel, shareAcknowledgeResponse.PrettyPrint())
+
+			buf := bytes.NewBuffer(make([]byte, 0))
+			err = shareAcknowledgeResponse.Write(buf)
+			if err != nil {
+				slog.Error("<- Failed to re-encode ShareAcknowledge response", "node", p.NodeId, "error", err)
 			}
 			response.Body = buf
 		}
