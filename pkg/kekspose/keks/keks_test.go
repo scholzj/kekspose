@@ -4,51 +4,14 @@ import (
 	"context"
 	"testing"
 
-	kafkav1beta2 "github.com/scholzj/strimzi-go/pkg/apis/kafka.strimzi.io/v1beta2"
+	kafkav1 "github.com/scholzj/strimzi-go/pkg/apis/kafka.strimzi.io/v1"
 	"github.com/scholzj/strimzi-go/pkg/client/clientset/versioned/fake"
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func TestZooBasedCluster(t *testing.T) {
-	replicas := int32(3)
-	kafka := &kafkav1beta2.Kafka{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "my-cluster",
-			Namespace: "my-namespace",
-		},
-		Spec: &kafkav1beta2.KafkaSpec{
-			Kafka: &kafkav1beta2.KafkaClusterSpec{
-				Version:  "3.9.0",
-				Replicas: &replicas,
-				Listeners: []kafkav1beta2.GenericKafkaListener{{
-					Name: "plain",
-					Type: kafkav1beta2.INTERNAL_KAFKALISTENERTYPE,
-					Tls:  false,
-					Port: 9092,
-				}},
-			},
-		},
-		Status: &kafkav1beta2.KafkaStatus{
-			Conditions: []kafkav1beta2.Condition{{
-				Type:   "Ready",
-				Status: "True",
-			}},
-		},
-	}
-
-	client := fake.NewSimpleClientset()
-	_, err := client.KafkaV1beta2().Kafkas("my-namespace").Create(context.TODO(), kafka, metav1.CreateOptions{})
-	assert.Nil(t, err)
-
-	keks, err := BakeKeks(client, "my-namespace", "my-cluster", "plain")
-	assert.Nil(t, err)
-	assert.Equal(t, map[int32]string{0: "my-cluster-kafka-0", 1: "my-cluster-kafka-1", 2: "my-cluster-kafka-2"}, keks.Nodes)
-	assert.Equal(t, uint32(9092), keks.Port)
-}
-
 func TestNodePoolBasedCluster(t *testing.T) {
-	kafka := &kafkav1beta2.Kafka{
+	kafka := &kafkav1.Kafka{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "my-cluster",
 			Namespace: "my-namespace",
@@ -56,19 +19,19 @@ func TestNodePoolBasedCluster(t *testing.T) {
 				"strimzi.io/node-pools": "enabled",
 			},
 		},
-		Spec: &kafkav1beta2.KafkaSpec{
-			Kafka: &kafkav1beta2.KafkaClusterSpec{
+		Spec: &kafkav1.KafkaSpec{
+			Kafka: &kafkav1.KafkaClusterSpec{
 				Version: "3.9.0",
-				Listeners: []kafkav1beta2.GenericKafkaListener{{
+				Listeners: []kafkav1.GenericKafkaListener{{
 					Name: "plain",
-					Type: kafkav1beta2.INTERNAL_KAFKALISTENERTYPE,
+					Type: kafkav1.INTERNAL_KAFKALISTENERTYPE,
 					Tls:  false,
 					Port: 9092,
 				}},
 			},
 		},
-		Status: &kafkav1beta2.KafkaStatus{
-			Conditions: []kafkav1beta2.Condition{{
+		Status: &kafkav1.KafkaStatus{
+			Conditions: []kafkav1.Condition{{
 				Type:   "Ready",
 				Status: "True",
 			}},
@@ -77,7 +40,7 @@ func TestNodePoolBasedCluster(t *testing.T) {
 
 	volumeId := int32(0)
 
-	nodePool1 := &kafkav1beta2.KafkaNodePool{
+	nodePool1 := &kafkav1.KafkaNodePool{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "pool-a",
 			Namespace: "my-namespace",
@@ -85,24 +48,24 @@ func TestNodePoolBasedCluster(t *testing.T) {
 				"strimzi.io/cluster": "my-cluster",
 			},
 		},
-		Spec: &kafkav1beta2.KafkaNodePoolSpec{
+		Spec: &kafkav1.KafkaNodePoolSpec{
 			Replicas: 3,
-			Roles:    []kafkav1beta2.ProcessRoles{kafkav1beta2.BROKER_PROCESSROLES},
-			Storage: &kafkav1beta2.Storage{
-				Type: kafkav1beta2.JBOD_STORAGETYPE,
-				Volumes: []kafkav1beta2.SingleVolumeStorage{{
+			Roles:    []kafkav1.ProcessRoles{kafkav1.BROKER_PROCESSROLES},
+			Storage: &kafkav1.Storage{
+				Type: kafkav1.JBOD_STORAGETYPE,
+				Volumes: []kafkav1.SingleVolumeStorage{{
 					Id:   &volumeId,
-					Type: kafkav1beta2.PERSISTENT_CLAIM_SINGLEVOLUMESTORAGETYPE,
+					Type: kafkav1.PERSISTENT_CLAIM_SINGLEVOLUMESTORAGETYPE,
 					Size: "100Gi",
 				}},
 			},
 		},
-		Status: &kafkav1beta2.KafkaNodePoolStatus{
+		Status: &kafkav1.KafkaNodePoolStatus{
 			NodeIds: []int32{0, 1, 2},
 		},
 	}
 
-	nodePool2 := &kafkav1beta2.KafkaNodePool{
+	nodePool2 := &kafkav1.KafkaNodePool{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "pool-b",
 			Namespace: "my-namespace",
@@ -110,24 +73,24 @@ func TestNodePoolBasedCluster(t *testing.T) {
 				"strimzi.io/cluster": "my-cluster",
 			},
 		},
-		Spec: &kafkav1beta2.KafkaNodePoolSpec{
+		Spec: &kafkav1.KafkaNodePoolSpec{
 			Replicas: 3,
-			Roles:    []kafkav1beta2.ProcessRoles{kafkav1beta2.BROKER_PROCESSROLES, kafkav1beta2.CONTROLLER_PROCESSROLES},
-			Storage: &kafkav1beta2.Storage{
-				Type: kafkav1beta2.JBOD_STORAGETYPE,
-				Volumes: []kafkav1beta2.SingleVolumeStorage{{
+			Roles:    []kafkav1.ProcessRoles{kafkav1.BROKER_PROCESSROLES, kafkav1.CONTROLLER_PROCESSROLES},
+			Storage: &kafkav1.Storage{
+				Type: kafkav1.JBOD_STORAGETYPE,
+				Volumes: []kafkav1.SingleVolumeStorage{{
 					Id:   &volumeId,
-					Type: kafkav1beta2.PERSISTENT_CLAIM_SINGLEVOLUMESTORAGETYPE,
+					Type: kafkav1.PERSISTENT_CLAIM_SINGLEVOLUMESTORAGETYPE,
 					Size: "100Gi",
 				}},
 			},
 		},
-		Status: &kafkav1beta2.KafkaNodePoolStatus{
+		Status: &kafkav1.KafkaNodePoolStatus{
 			NodeIds: []int32{100, 101, 102},
 		},
 	}
 
-	nodePool3 := &kafkav1beta2.KafkaNodePool{
+	nodePool3 := &kafkav1.KafkaNodePool{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "pool-c",
 			Namespace: "my-namespace",
@@ -135,34 +98,34 @@ func TestNodePoolBasedCluster(t *testing.T) {
 				"strimzi.io/cluster": "my-cluster",
 			},
 		},
-		Spec: &kafkav1beta2.KafkaNodePoolSpec{
+		Spec: &kafkav1.KafkaNodePoolSpec{
 			Replicas: 3,
-			Roles:    []kafkav1beta2.ProcessRoles{kafkav1beta2.CONTROLLER_PROCESSROLES},
-			Storage: &kafkav1beta2.Storage{
-				Type: kafkav1beta2.JBOD_STORAGETYPE,
-				Volumes: []kafkav1beta2.SingleVolumeStorage{{
+			Roles:    []kafkav1.ProcessRoles{kafkav1.CONTROLLER_PROCESSROLES},
+			Storage: &kafkav1.Storage{
+				Type: kafkav1.JBOD_STORAGETYPE,
+				Volumes: []kafkav1.SingleVolumeStorage{{
 					Id:   &volumeId,
-					Type: kafkav1beta2.PERSISTENT_CLAIM_SINGLEVOLUMESTORAGETYPE,
+					Type: kafkav1.PERSISTENT_CLAIM_SINGLEVOLUMESTORAGETYPE,
 					Size: "100Gi",
 				}},
 			},
 		},
-		Status: &kafkav1beta2.KafkaNodePoolStatus{
+		Status: &kafkav1.KafkaNodePoolStatus{
 			NodeIds: []int32{1000, 1001, 1002},
 		},
 	}
 
 	client := fake.NewSimpleClientset()
-	_, err := client.KafkaV1beta2().Kafkas("my-namespace").Create(context.TODO(), kafka, metav1.CreateOptions{})
+	_, err := client.KafkaV1().Kafkas("my-namespace").Create(context.TODO(), kafka, metav1.CreateOptions{})
 	assert.Nil(t, err)
 
-	_, err = client.KafkaV1beta2().KafkaNodePools("my-namespace").Create(context.TODO(), nodePool1, metav1.CreateOptions{})
+	_, err = client.KafkaV1().KafkaNodePools("my-namespace").Create(context.TODO(), nodePool1, metav1.CreateOptions{})
 	assert.Nil(t, err)
 
-	_, err = client.KafkaV1beta2().KafkaNodePools("my-namespace").Create(context.TODO(), nodePool2, metav1.CreateOptions{})
+	_, err = client.KafkaV1().KafkaNodePools("my-namespace").Create(context.TODO(), nodePool2, metav1.CreateOptions{})
 	assert.Nil(t, err)
 
-	_, err = client.KafkaV1beta2().KafkaNodePools("my-namespace").Create(context.TODO(), nodePool3, metav1.CreateOptions{})
+	_, err = client.KafkaV1().KafkaNodePools("my-namespace").Create(context.TODO(), nodePool3, metav1.CreateOptions{})
 	assert.Nil(t, err)
 
 	keks, err := BakeKeks(client, "my-namespace", "my-cluster", "plain")
@@ -172,19 +135,17 @@ func TestNodePoolBasedCluster(t *testing.T) {
 }
 
 func TestUnreadyCluster(t *testing.T) {
-	replicas := int32(3)
-	kafka := &kafkav1beta2.Kafka{
+	kafka := &kafkav1.Kafka{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "my-cluster",
 			Namespace: "my-namespace",
 		},
-		Spec: &kafkav1beta2.KafkaSpec{
-			Kafka: &kafkav1beta2.KafkaClusterSpec{
-				Version:  "3.9.0",
-				Replicas: &replicas,
-				Listeners: []kafkav1beta2.GenericKafkaListener{{
+		Spec: &kafkav1.KafkaSpec{
+			Kafka: &kafkav1.KafkaClusterSpec{
+				Version: "3.9.0",
+				Listeners: []kafkav1.GenericKafkaListener{{
 					Name: "internal",
-					Type: kafkav1beta2.INTERNAL_KAFKALISTENERTYPE,
+					Type: kafkav1.INTERNAL_KAFKALISTENERTYPE,
 					Tls:  false,
 					Port: 9092,
 				}},
@@ -193,7 +154,7 @@ func TestUnreadyCluster(t *testing.T) {
 	}
 
 	client := fake.NewSimpleClientset()
-	_, err := client.KafkaV1beta2().Kafkas("my-namespace").Create(context.TODO(), kafka, metav1.CreateOptions{})
+	_, err := client.KafkaV1().Kafkas("my-namespace").Create(context.TODO(), kafka, metav1.CreateOptions{})
 	assert.Nil(t, err)
 
 	keks, err := BakeKeks(client, "my-namespace", "my-cluster", "internal")
@@ -203,31 +164,29 @@ func TestUnreadyCluster(t *testing.T) {
 }
 
 func TestNoTlsListener(t *testing.T) {
-	replicas := int32(3)
-	kafka := &kafkav1beta2.Kafka{
+	kafka := &kafkav1.Kafka{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "my-cluster",
 			Namespace: "my-namespace",
 		},
-		Spec: &kafkav1beta2.KafkaSpec{
-			Kafka: &kafkav1beta2.KafkaClusterSpec{
-				Version:  "3.9.0",
-				Replicas: &replicas,
-				Listeners: []kafkav1beta2.GenericKafkaListener{{
+		Spec: &kafkav1.KafkaSpec{
+			Kafka: &kafkav1.KafkaClusterSpec{
+				Version: "3.9.0",
+				Listeners: []kafkav1.GenericKafkaListener{{
 					Name: "tls",
-					Type: kafkav1beta2.INTERNAL_KAFKALISTENERTYPE,
+					Type: kafkav1.INTERNAL_KAFKALISTENERTYPE,
 					Tls:  true,
 					Port: 9093,
 				}, {
 					Name: "external",
-					Type: kafkav1beta2.NODEPORT_KAFKALISTENERTYPE,
+					Type: kafkav1.NODEPORT_KAFKALISTENERTYPE,
 					Tls:  true,
 					Port: 9094,
 				}},
 			},
 		},
-		Status: &kafkav1beta2.KafkaStatus{
-			Conditions: []kafkav1beta2.Condition{{
+		Status: &kafkav1.KafkaStatus{
+			Conditions: []kafkav1.Condition{{
 				Type:   "Ready",
 				Status: "True",
 			}},
@@ -235,7 +194,7 @@ func TestNoTlsListener(t *testing.T) {
 	}
 
 	client := fake.NewSimpleClientset()
-	_, err := client.KafkaV1beta2().Kafkas("my-namespace").Create(context.TODO(), kafka, metav1.CreateOptions{})
+	_, err := client.KafkaV1().Kafkas("my-namespace").Create(context.TODO(), kafka, metav1.CreateOptions{})
 	assert.Nil(t, err)
 
 	// Without specified listener
@@ -252,31 +211,29 @@ func TestNoTlsListener(t *testing.T) {
 }
 
 func TestNonExistentListener(t *testing.T) {
-	replicas := int32(3)
-	kafka := &kafkav1beta2.Kafka{
+	kafka := &kafkav1.Kafka{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "my-cluster",
 			Namespace: "my-namespace",
 		},
-		Spec: &kafkav1beta2.KafkaSpec{
-			Kafka: &kafkav1beta2.KafkaClusterSpec{
-				Version:  "3.9.0",
-				Replicas: &replicas,
-				Listeners: []kafkav1beta2.GenericKafkaListener{{
+		Spec: &kafkav1.KafkaSpec{
+			Kafka: &kafkav1.KafkaClusterSpec{
+				Version: "3.9.0",
+				Listeners: []kafkav1.GenericKafkaListener{{
 					Name: "tls",
-					Type: kafkav1beta2.INTERNAL_KAFKALISTENERTYPE,
+					Type: kafkav1.INTERNAL_KAFKALISTENERTYPE,
 					Tls:  true,
 					Port: 9093,
 				}, {
 					Name: "external",
-					Type: kafkav1beta2.NODEPORT_KAFKALISTENERTYPE,
+					Type: kafkav1.NODEPORT_KAFKALISTENERTYPE,
 					Tls:  true,
 					Port: 9094,
 				}},
 			},
 		},
-		Status: &kafkav1beta2.KafkaStatus{
-			Conditions: []kafkav1beta2.Condition{{
+		Status: &kafkav1.KafkaStatus{
+			Conditions: []kafkav1.Condition{{
 				Type:   "Ready",
 				Status: "True",
 			}},
@@ -284,7 +241,7 @@ func TestNonExistentListener(t *testing.T) {
 	}
 
 	client := fake.NewSimpleClientset()
-	_, err := client.KafkaV1beta2().Kafkas("my-namespace").Create(context.TODO(), kafka, metav1.CreateOptions{})
+	_, err := client.KafkaV1().Kafkas("my-namespace").Create(context.TODO(), kafka, metav1.CreateOptions{})
 	assert.Nil(t, err)
 
 	keks, err := BakeKeks(client, "my-namespace", "my-cluster", "plain")
