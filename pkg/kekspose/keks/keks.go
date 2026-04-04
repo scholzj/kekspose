@@ -23,7 +23,7 @@ import (
 	"slices"
 	"strings"
 
-	strimziapi "github.com/scholzj/strimzi-go/pkg/apis/kafka.strimzi.io/v1beta2"
+	strimziapi "github.com/scholzj/strimzi-go/pkg/apis/kafka.strimzi.io/v1"
 	strimziclient "github.com/scholzj/strimzi-go/pkg/client/clientset/versioned"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -58,7 +58,7 @@ func BakeKeks(strimzi strimziclient.Interface, namespace string, clusterName str
 }
 
 func findKafka(strimzi strimziclient.Interface, namespace string, clusterName string) (*strimziapi.Kafka, error) {
-	kafka, err := strimzi.KafkaV1beta2().Kafkas(namespace).Get(context.TODO(), clusterName, v1.GetOptions{})
+	kafka, err := strimzi.KafkaV1().Kafkas(namespace).Get(context.TODO(), clusterName, v1.GetOptions{})
 	if err != nil {
 		if !strings.Contains(err.Error(), "not found") {
 			//goland:noinspection GoErrorStringFormat
@@ -146,36 +146,24 @@ func findListenerByName(kafka *strimziapi.Kafka, listenerName string) (*strimzia
 }
 
 func findNodes(strimzi strimziclient.Interface, kafka *strimziapi.Kafka) (map[int32]string, error) {
-	if len(kafka.Annotations) > 0 && kafka.Annotations["strimzi.io/node-pools"] == "enabled" {
-		slog.Debug("Node Pools are enabled -> calculating nodes from their status")
-		nodes := make(map[int32]string)
+	slog.Debug("Searching for Kafka nodes in node pools")
+	nodes := make(map[int32]string)
 
-		nodePools, err := strimzi.KafkaV1beta2().KafkaNodePools(kafka.Namespace).List(context.TODO(), v1.ListOptions{LabelSelector: "strimzi.io/cluster=" + kafka.Name})
-		if err != nil {
-			return nil, fmt.Errorf("failed to list Kafka Node Pools: %v", err)
-		}
+	nodePools, err := strimzi.KafkaV1().KafkaNodePools(kafka.Namespace).List(context.TODO(), v1.ListOptions{LabelSelector: "strimzi.io/cluster=" + kafka.Name})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list Kafka Node Pools: %v", err)
+	}
 
-		for _, nodePool := range nodePools.Items {
-			if slices.Contains(nodePool.Spec.Roles, strimziapi.BROKER_PROCESSROLES) {
-				if nodePool.Status != nil && len(nodePool.Status.NodeIds) > 0 {
-					for _, nodeId := range nodePool.Status.NodeIds {
-						nodes[nodeId] = fmt.Sprintf("%s-%s-%d", kafka.Name, nodePool.Name, nodeId)
-					}
+	for _, nodePool := range nodePools.Items {
+		if slices.Contains(nodePool.Spec.Roles, strimziapi.BROKER_PROCESSROLES) {
+			if nodePool.Status != nil && len(nodePool.Status.NodeIds) > 0 {
+				for _, nodeId := range nodePool.Status.NodeIds {
+					nodes[nodeId] = fmt.Sprintf("%s-%s-%d", kafka.Name, nodePool.Name, nodeId)
 				}
 			}
 		}
-
-		slog.Info("Found Kafka nodes", "nodes", nodes)
-		return nodes, nil
-	} else {
-		slog.Debug("Node Pools not enabled -> calculating node IDs", "replicas", kafka.Spec.Kafka.Replicas)
-		nodes := make(map[int32]string)
-
-		for i := int32(0); i < *kafka.Spec.Kafka.Replicas; i++ {
-			nodes[i] = fmt.Sprintf("%s-kafka-%d", kafka.Name, i)
-		}
-
-		slog.Info("Found Kafka nodes", "nodes", nodes)
-		return nodes, nil
 	}
+
+	slog.Info("Found Kafka nodes", "nodes", nodes)
+	return nodes, nil
 }
