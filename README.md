@@ -73,6 +73,7 @@ Keksposé supports several parameters that can be used to configure it:
 |--------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------|
 | `--help` / `-h`          | Help                                                                                                                                                                |               |
 | `--kubeconfig`           | Path to the kubeconfig file to use for Kubernetes API requests.                                                                                                     |               |
+| `--context`              | Name of the Kubernetes context to use from the kubeconfig file.                                                                                                     |               |
 | `--namespace` / `-n`     | Namespace of the Kafka cluster. This is also the namespace where the Keksposé proxy will be deployed. Defaults to the namespace from your Kubernetes configuration. |               |
 | `--cluster-name` / `-c`  | Name of the Kafka cluster.                                                                                                                                          | `my-cluster`  |
 | `--listener-name`/ `-l`  | Name of the listener that should be exposed. If not set, Keksposé will try to find a suitable listener on its own.                                                  |               |

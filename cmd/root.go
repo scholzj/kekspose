@@ -25,6 +25,7 @@ import (
 )
 
 var kubeconfigpath string
+var contextName string
 var namespace string
 var clusterName string
 var listenerName string
@@ -48,6 +49,7 @@ var rootCmd = &cobra.Command{
 
 		kekspose := kekspose.Kekspose{
 			KubeConfigPath: kubeconfigpath,
+			Context:        contextName,
 			Namespace:      namespace,
 			ClusterName:    clusterName,
 			ListenerName:   listenerName,
@@ -76,6 +78,7 @@ func init() {
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
 	rootCmd.Flags().StringVar(&kubeconfigpath, "kubeconfig", "", "Path to the kubeconfig file to use for Kubernetes API requests.")
+	rootCmd.Flags().StringVar(&contextName, "context", "", "Name of the Kubernetes context to use from the kubeconfig file.")
 	rootCmd.Flags().StringVarP(&namespace, "namespace", "n", "", "Namespace of the Kafka cluster.")
 	rootCmd.Flags().StringVarP(&clusterName, "cluster-name", "c", "my-cluster", "Name of the Kafka cluster.")
 	rootCmd.Flags().StringVarP(&listenerName, "listener-name", "l", "", "Name of the listener that should be exposed.")
