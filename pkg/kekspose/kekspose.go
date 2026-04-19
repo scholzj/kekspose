@@ -17,6 +17,7 @@ limitations under the License.
 package kekspose
 
 import (
+	"fmt"
 	"log/slog"
 	"net"
 	"os"
@@ -38,6 +39,7 @@ import (
 
 type Kekspose struct {
 	KubeConfigPath string
+	Context        string
 	Namespace      string
 	ClusterName    string
 	ListenerName   string
@@ -45,37 +47,15 @@ type Kekspose struct {
 }
 
 func (k *Kekspose) ExposeKafka() {
-	// Prepare Kubernetes client configuration
-	if k.KubeConfigPath == "" {
-		if os.Getenv("KUBECONFIG") != "" {
-			k.KubeConfigPath = os.Getenv("KUBECONFIG")
-			slog.Info("Found kubeconfig", "kubeconfig", k.KubeConfigPath)
-		} else if home := homedir.HomeDir(); home != "" {
-			k.KubeConfigPath = filepath.Join(home, ".kube", "config")
-			slog.Info("Found kubeconfig", "kubeconfig", k.KubeConfigPath)
-		}
+	k.resolveKubeConfigPath()
+	clientConfig := k.newClientConfig()
+
+	if err := k.resolveNamespace(clientConfig); err != nil {
+		slog.Error("Failed to determine the namespace", "error", err)
+		return
 	}
 
-	if k.Namespace == "" && k.KubeConfigPath != "" {
-		config, err := clientcmd.LoadFromFile(k.KubeConfigPath)
-		if err != nil {
-			slog.Error("Failed to parse Kubernetes client configuration", "error", err)
-			return
-		}
-
-		ns := config.Contexts[config.CurrentContext].Namespace
-
-		if ns != "" {
-			slog.Info("Identified default namespace", "namespace", ns)
-			k.Namespace = config.Contexts[config.CurrentContext].Namespace
-		} else {
-			slog.Error("Failed to determine the default namespace. Please use the --namespace / -n option to specify it.")
-			return
-		}
-
-	}
-
-	kubeconfig, err := clientcmd.BuildConfigFromFlags("", k.KubeConfigPath)
+	kubeconfig, err := clientConfig.ClientConfig()
 	if err != nil {
 		slog.Error("Failed to create Kubernetes client configuration", "error", err)
 		return
@@ -154,6 +134,74 @@ func (k *Kekspose) ExposeKafka() {
 		slog.Error("Failed forwarding ports", "error", err)
 		os.Exit(1)
 	}
+}
+
+func (k *Kekspose) resolveKubeConfigPath() {
+	if k.KubeConfigPath == "" {
+		if os.Getenv("KUBECONFIG") != "" {
+			k.KubeConfigPath = os.Getenv("KUBECONFIG")
+			slog.Info("Found kubeconfig", "kubeconfig", k.KubeConfigPath)
+		} else if home := homedir.HomeDir(); home != "" {
+			k.KubeConfigPath = filepath.Join(home, ".kube", "config")
+			slog.Info("Found kubeconfig", "kubeconfig", k.KubeConfigPath)
+		}
+	}
+}
+
+func (k *Kekspose) newClientConfig() clientcmd.ClientConfig {
+	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+
+	if k.KubeConfigPath != "" {
+		loadingRules.ExplicitPath = k.KubeConfigPath
+	}
+
+	overrides := &clientcmd.ConfigOverrides{}
+
+	if k.Context != "" {
+		overrides.CurrentContext = k.Context
+		slog.Info("Using Kubernetes context", "context", k.Context)
+	}
+
+	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, overrides)
+}
+
+func (k *Kekspose) resolveNamespace(clientConfig clientcmd.ClientConfig) error {
+	if k.Namespace != "" {
+		return nil
+	}
+
+	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+	if k.KubeConfigPath != "" {
+		loadingRules.ExplicitPath = k.KubeConfigPath
+	}
+
+	config, err := loadingRules.Load()
+	if err != nil {
+		return err
+	}
+
+	contextName := config.CurrentContext
+	if k.Context != "" {
+		contextName = k.Context
+	}
+
+	if contextName == "" {
+		return fmt.Errorf("no Kubernetes context selected. Please use the --context option or configure a current context in kubeconfig")
+	}
+
+	context, found := config.Contexts[contextName]
+	if !found {
+		return fmt.Errorf("Kubernetes context %s was not found in kubeconfig", contextName)
+	}
+
+	if context.Namespace == "" {
+		return fmt.Errorf("please use the --namespace / -n option to specify it")
+	}
+
+	slog.Info("Identified default namespace", "namespace", context.Namespace, "context", contextName)
+	k.Namespace = context.Namespace
+
+	return nil
 }
 
 func (k *Kekspose) preparePortMapping(keks *keks2.Keks) map[int32]uint32 {
