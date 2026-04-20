@@ -43,7 +43,7 @@ FORMULA_CLASS="$(formula_class "$FORMULA_NAME")"
 
 cat <<EOF
 class ${FORMULA_CLASS} < Formula
-  desc "Expose Strimzi Kafka clusters from local Kubernetes environments"
+  desc "Keksposé: Expose your Kafka cluster outside your Minikube, Kind, or Docker Desktop clusters"
   homepage "https://github.com/${REPOSITORY}"
   version "${VERSION_NO_V}"
   license "Apache-2.0"
