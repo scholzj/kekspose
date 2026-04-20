@@ -104,6 +104,12 @@ However, at this point, only the ApiVersions, Metadata, and FindCoordinator requ
 
 ## Frequently Asked Questions
 
+### What Strimzi versions does Keksposé support?
+
+Keksposé 0.9.0 and newer supports only the Strimzi `v1` CRD API version.
+That means it is compatible with Strimzi 0.49.0 and newer.
+Older Kekspos= versions support Strimzi `v1beta2` API and can be used also with Strimzi 0.51 and older.
+
 ### Does Keksposé support Kafka clusters with authentication?
 
 Keksposé requires a listener without TLS encryption.
