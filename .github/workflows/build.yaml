@@ -6,6 +6,9 @@ on:
     tags:
       - '*'
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -18,32 +21,26 @@ jobs:
           go-version: '1.25.x'
       - name: Run tests
         run: go test -v ./...
-      - name: Build
+      - name: Build release archives
         env:
-          PLATFORMS: "darwin/arm64 darwin/amd64 linux/386 linux/amd64 linux/arm64 windows/amd64 windows/arm64 windows/386"
+          PLATFORMS: "darwin/arm64 darwin/amd64 linux/amd64 linux/arm64 windows/amd64 windows/arm64"
+          VERSION: ${{github.ref_name}}
+        run: bash ./hack/package-release.sh "$VERSION"
+      - name: Generate Homebrew formulas
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
           VERSION: ${{github.ref_name}}
         run: |
-          for PLATFORM in ${PLATFORMS}
-          do
-              PLATFORM_SPLIT=(${PLATFORM//\// })
-              GOOS=${PLATFORM_SPLIT[0]}
-              GOARCH=${PLATFORM_SPLIT[1]}
-              OUTPUT_NAME=kekspose'-'$VERSION'-'$GOOS'-'$GOARCH
-              
-              echo "Building platform ${PLATFORM} as ${OUTPUT_NAME}"
-              
-              if [ $GOOS = "windows" ]; then
-                  OUTPUT_NAME+='.exe'
-              fi
-          
-              env GOOS=$GOOS GOARCH=$GOARCH go build -o $OUTPUT_NAME
-              if [ $? -ne 0 ]; then
-                  echo 'An error has occurred! Aborting the script execution...'
-                  exit 1
-              fi
-          done
-      - name: Upload binary
+          VERSION_NO_V="${VERSION#v}"
+          bash ./hack/render-homebrew-formula.sh "$VERSION" dist > dist/kekspose.rb
+          bash ./hack/render-homebrew-formula.sh "$VERSION" dist "kekspose@${VERSION_NO_V}" > "dist/kekspose@${VERSION_NO_V}.rb"
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: kekspose
-          path: kekspose-*
+          path: dist/*
+      - name: Publish GitHub release assets
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*

@@ -65,6 +65,13 @@ _Note: For the previous version based on the Kroxylicious proxy, see the [0.6.x 
 
 You can download one of the release binaries from one of the releases and use it.
 
+You can also install Keksposé using Homebrew:
+
+```bash
+brew tap scholzj/tap
+brew install kekspose
+```
+
 ### Configuration
 
 Keksposé supports several parameters that can be used to configure it:
