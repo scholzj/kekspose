@@ -35,7 +35,7 @@ jobs:
           bash ./hack/render-homebrew-formula.sh "$VERSION" dist > dist/kekspose.rb
           bash ./hack/render-homebrew-formula.sh "$VERSION" dist "kekspose@${VERSION_NO_V}" > "dist/kekspose@${VERSION_NO_V}.rb"
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: kekspose
           path: dist/*
