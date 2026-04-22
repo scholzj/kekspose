@@ -1,7 +1,10 @@
 package keks
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
+	"strings"
 	"testing"
 
 	kafkav1 "github.com/scholzj/strimzi-go/pkg/apis/kafka.strimzi.io/v1"
@@ -128,7 +131,7 @@ func TestNodePoolBasedCluster(t *testing.T) {
 	_, err = client.KafkaV1().KafkaNodePools("my-namespace").Create(context.TODO(), nodePool3, metav1.CreateOptions{})
 	assert.Nil(t, err)
 
-	keks, err := BakeKeks(client, "my-namespace", "my-cluster", "plain")
+	keks, err := BakeKeks(client, "my-namespace", "my-cluster", "plain", false)
 	assert.Nil(t, err)
 	assert.Equal(t, map[int32]string{0: "my-cluster-pool-a-0", 1: "my-cluster-pool-a-1", 2: "my-cluster-pool-a-2", 100: "my-cluster-pool-b-100", 101: "my-cluster-pool-b-101", 102: "my-cluster-pool-b-102"}, keks.Nodes)
 	assert.Equal(t, uint32(9092), keks.Port)
@@ -157,10 +160,50 @@ func TestUnreadyCluster(t *testing.T) {
 	_, err := client.KafkaV1().Kafkas("my-namespace").Create(context.TODO(), kafka, metav1.CreateOptions{})
 	assert.Nil(t, err)
 
-	keks, err := BakeKeks(client, "my-namespace", "my-cluster", "internal")
+	keks, err := BakeKeks(client, "my-namespace", "my-cluster", "internal", false)
 	assert.NotNil(t, err)
-	assert.Equal(t, "Kafka cluster my-cluster in namespace my-namespace was found, but it is not ready", err.Error())
+	assert.Equal(t, "Kafka cluster my-cluster in namespace my-namespace was found, but it is not ready. Use --allow-unready to override this check", err.Error())
 	assert.Nil(t, keks)
+}
+
+func TestUnreadyClusterWithOverride(t *testing.T) {
+	kafka := &kafkav1.Kafka{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "my-cluster",
+			Namespace: "my-namespace",
+		},
+		Spec: &kafkav1.KafkaSpec{
+			Kafka: &kafkav1.KafkaClusterSpec{
+				Version: "3.9.0",
+				Listeners: []kafkav1.GenericKafkaListener{{
+					Name: "internal",
+					Type: kafkav1.INTERNAL_KAFKALISTENERTYPE,
+					Tls:  false,
+					Port: 9092,
+				}},
+			},
+		},
+	}
+
+	var logOutput bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logOutput, nil))
+	originalDefaultLogger := slog.Default()
+	slog.SetDefault(logger)
+	t.Cleanup(func() {
+		slog.SetDefault(originalDefaultLogger)
+	})
+
+	client := fake.NewSimpleClientset()
+	_, err := client.KafkaV1().Kafkas("my-namespace").Create(context.TODO(), kafka, metav1.CreateOptions{})
+	assert.Nil(t, err)
+
+	keks, err := BakeKeks(client, "my-namespace", "my-cluster", "internal", true)
+	assert.Nil(t, err)
+	assert.NotNil(t, keks)
+	assert.Equal(t, uint32(9092), keks.Port)
+	assert.Contains(t, logOutput.String(), "Kafka cluster is not Ready, continuing because the readiness check was overridden")
+	assert.Contains(t, logOutput.String(), "overrideFlag=--allow-unready")
+	assert.NotEmpty(t, strings.TrimSpace(logOutput.String()))
 }
 
 func TestNoTlsListener(t *testing.T) {
@@ -198,13 +241,13 @@ func TestNoTlsListener(t *testing.T) {
 	assert.Nil(t, err)
 
 	// Without specified listener
-	keks, err := BakeKeks(client, "my-namespace", "my-cluster", "")
+	keks, err := BakeKeks(client, "my-namespace", "my-cluster", "", false)
 	assert.NotNil(t, err)
 	assert.Equal(t, "no Kafka listener without TLS encryption found", err.Error())
 	assert.Nil(t, keks)
 
 	// With specified listener
-	keks, err = BakeKeks(client, "my-namespace", "my-cluster", "tls")
+	keks, err = BakeKeks(client, "my-namespace", "my-cluster", "tls", false)
 	assert.NotNil(t, err)
 	assert.Equal(t, "Kafka listener with name tls exists, but has unsupported configuration (TLS encryption is enabled)", err.Error())
 	assert.Nil(t, keks)
@@ -244,7 +287,7 @@ func TestNonExistentListener(t *testing.T) {
 	_, err := client.KafkaV1().Kafkas("my-namespace").Create(context.TODO(), kafka, metav1.CreateOptions{})
 	assert.Nil(t, err)
 
-	keks, err := BakeKeks(client, "my-namespace", "my-cluster", "plain")
+	keks, err := BakeKeks(client, "my-namespace", "my-cluster", "plain", false)
 	assert.NotNil(t, err)
 	assert.Equal(t, "Kafka listener with name plain was not found", err.Error())
 	assert.Nil(t, keks)

@@ -44,6 +44,7 @@ type Kekspose struct {
 	ClusterName    string
 	ListenerName   string
 	StartingPort   uint32
+	AllowUnready   bool
 }
 
 func (k *Kekspose) ExposeKafka() {
@@ -77,7 +78,7 @@ func (k *Kekspose) ExposeKafka() {
 	}
 
 	// Get Kafka cluster details
-	keks, err := keks2.BakeKeks(strimziclient, k.Namespace, k.ClusterName, k.ListenerName)
+	keks, err := keks2.BakeKeks(strimziclient, k.Namespace, k.ClusterName, k.ListenerName, k.AllowUnready)
 	if err != nil {
 		slog.Error("Failed to find the Kafka cluster with a suitable listener", "error", err)
 		return

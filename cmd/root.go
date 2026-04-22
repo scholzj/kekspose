@@ -30,6 +30,7 @@ var namespace string
 var clusterName string
 var listenerName string
 var startingPort uint32
+var allowUnready bool
 var verbose int
 
 // rootCmd represents the base command when called without any subcommands
@@ -54,6 +55,7 @@ var rootCmd = &cobra.Command{
 			ClusterName:    clusterName,
 			ListenerName:   listenerName,
 			StartingPort:   startingPort,
+			AllowUnready:   allowUnready,
 		}
 		kekspose.ExposeKafka()
 	},
@@ -83,5 +85,6 @@ func init() {
 	rootCmd.Flags().StringVarP(&clusterName, "cluster-name", "c", "my-cluster", "Name of the Kafka cluster.")
 	rootCmd.Flags().StringVarP(&listenerName, "listener-name", "l", "", "Name of the listener that should be exposed.")
 	rootCmd.Flags().Uint32VarP(&startingPort, "starting-port", "p", 50000, "The starting port number. This port number will be used for the bootstrap connection and will be used as the basis to calculate the per-broker ports.")
+	rootCmd.Flags().BoolVar(&allowUnready, "allow-unready", false, "Allow connecting to Kafka clusters even when the Kafka resource is not Ready.")
 	rootCmd.Flags().CountVarP(&verbose, "verbose", "v", "Enables verbose logging (can be repeated: -v, -vv, -vvv).")
 }
