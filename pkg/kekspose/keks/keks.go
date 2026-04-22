@@ -33,8 +33,8 @@ type Keks struct {
 	Port  uint32
 }
 
-func BakeKeks(strimzi strimziclient.Interface, namespace string, clusterName string, listenerName string) (*Keks, error) {
-	kafka, err := findKafka(strimzi, namespace, clusterName)
+func BakeKeks(strimzi strimziclient.Interface, namespace string, clusterName string, listenerName string, allowUnready bool) (*Keks, error) {
+	kafka, err := findKafka(strimzi, namespace, clusterName, allowUnready)
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +57,7 @@ func BakeKeks(strimzi strimziclient.Interface, namespace string, clusterName str
 	return keks, nil
 }
 
-func findKafka(strimzi strimziclient.Interface, namespace string, clusterName string) (*strimziapi.Kafka, error) {
+func findKafka(strimzi strimziclient.Interface, namespace string, clusterName string, allowUnready bool) (*strimziapi.Kafka, error) {
 	kafka, err := strimzi.KafkaV1().Kafkas(namespace).Get(context.TODO(), clusterName, v1.GetOptions{})
 	if err != nil {
 		if !strings.Contains(err.Error(), "not found") {
@@ -69,8 +69,12 @@ func findKafka(strimzi strimziclient.Interface, namespace string, clusterName st
 	}
 
 	if !isKafkaReady(kafka) {
-		//goland:noinspection GoErrorStringFormat
-		return nil, fmt.Errorf("Kafka cluster %s in namespace %s was found, but it is not ready", clusterName, namespace)
+		if !allowUnready {
+			//goland:noinspection GoErrorStringFormat
+			return nil, fmt.Errorf("Kafka cluster %s in namespace %s was found, but it is not ready. Use --allow-unready to override this check", clusterName, namespace)
+		}
+
+		slog.Warn("Kafka cluster is not Ready, continuing because the readiness check was overridden", "name", clusterName, "namespace", namespace, "overrideFlag", "--allow-unready")
 	}
 
 	slog.Info("Found Kafka cluster", "name", clusterName, "namespace", namespace)
