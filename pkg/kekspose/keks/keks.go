@@ -29,17 +29,19 @@ import (
 )
 
 type Keks struct {
-	Nodes map[int32]string
-	Port  uint32
+	Nodes        map[int32]string
+	Port         uint32
+	TLS          bool
+	ListenerName string
 }
 
-func BakeKeks(strimzi strimziclient.Interface, namespace string, clusterName string, listenerName string, allowUnready bool) (*Keks, error) {
+func BakeKeks(strimzi strimziclient.Interface, namespace string, clusterName string, listenerName string, allowUnready bool, allowInsecureTLS bool) (*Keks, error) {
 	kafka, err := findKafka(strimzi, namespace, clusterName, allowUnready)
 	if err != nil {
 		return nil, err
 	}
 
-	port, err := findPort(kafka, listenerName)
+	listener, err := findListener(kafka, listenerName, allowInsecureTLS)
 	if err != nil {
 		return nil, err
 	}
@@ -50,8 +52,10 @@ func BakeKeks(strimzi strimziclient.Interface, namespace string, clusterName str
 	}
 
 	keks := &Keks{
-		Port:  port,
-		Nodes: nodes,
+		Port:         uint32(listener.Port),
+		Nodes:        nodes,
+		TLS:          listener.Tls,
+		ListenerName: listener.Name,
 	}
 
 	return keks, nil
@@ -97,48 +101,51 @@ func isKafkaReady(kafka *strimziapi.Kafka) bool {
 	}
 }
 
-func findPort(kafka *strimziapi.Kafka, listenerName string) (uint32, error) {
+func findListener(kafka *strimziapi.Kafka, listenerName string, allowInsecureTLS bool) (*strimziapi.GenericKafkaListener, error) {
 	var listener *strimziapi.GenericKafkaListener
 	var err error
 
 	if listenerName != "" {
-		listener, err = findListenerByName(kafka, listenerName)
+		listener, err = findListenerByName(kafka, listenerName, allowInsecureTLS)
 		if err != nil {
-			return 0, err
+			return nil, err
 		}
 	} else {
-		listener, err = findFirstUnencryptedListener(kafka)
+		listener, err = findFirstSuitableListener(kafka, allowInsecureTLS)
 		if err != nil {
-			return 0, err
+			return nil, err
 		}
 	}
 
 	if listener == nil {
-		return 0, fmt.Errorf("failed to find listener")
+		return nil, fmt.Errorf("failed to find listener")
 	}
 
-	slog.Info("Found suitable port", "port", listener.Port, "listener", listener.Name)
-	return uint32(listener.Port), nil
+	slog.Info("Found suitable port", "port", listener.Port, "listener", listener.Name, "tls", listener.Tls)
+	return listener, nil
 }
 
-func findFirstUnencryptedListener(kafka *strimziapi.Kafka) (*strimziapi.GenericKafkaListener, error) {
+func findFirstSuitableListener(kafka *strimziapi.Kafka, allowInsecureTLS bool) (*strimziapi.GenericKafkaListener, error) {
 	for _, listener := range kafka.Spec.Kafka.Listeners {
-		if !listener.Tls {
-			slog.Info("Found suitable listener without TLS encryption", "listener", listener.Name)
+		if !listener.Tls || allowInsecureTLS {
+			slog.Info("Found suitable listener", "listener", listener.Name, "tls", listener.Tls)
 			return &listener, nil
 		}
 	}
 
 	// We did not find the listener with the right name
-	return nil, fmt.Errorf("no Kafka listener without TLS encryption found")
+	if allowInsecureTLS {
+		return nil, fmt.Errorf("no Kafka listener found")
+	}
+	return nil, fmt.Errorf("no Kafka listener without TLS encryption found. Use --allow-insecure-tls to allow TLS-encrypted listeners")
 }
 
-func findListenerByName(kafka *strimziapi.Kafka, listenerName string) (*strimziapi.GenericKafkaListener, error) {
+func findListenerByName(kafka *strimziapi.Kafka, listenerName string, allowInsecureTLS bool) (*strimziapi.GenericKafkaListener, error) {
 	for _, listener := range kafka.Spec.Kafka.Listeners {
 		if listener.Name == listenerName {
-			if listener.Tls {
+			if listener.Tls && !allowInsecureTLS {
 				//goland:noinspection GoErrorStringFormat
-				return nil, fmt.Errorf("Kafka listener with name %s exists, but has unsupported configuration (TLS encryption is enabled)", listenerName)
+				return nil, fmt.Errorf("Kafka listener with name %s exists, but has unsupported configuration (TLS encryption is enabled). Use --allow-insecure-tls to allow it", listenerName)
 			} else {
 				return &listener, nil
 			}

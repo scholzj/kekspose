@@ -28,10 +28,15 @@ Keksposé makes it possible to use port forwarding with Apache Kafka by proxying
 
 ## How does it work?
 
-Keksposé finds a listener without TLS encryption on your Strimzi-based Apache Kafka clusters and exposes it.
+By default, Keksposé finds a listener without TLS encryption on your Strimzi-based Apache Kafka clusters and exposes it.
 It creates a port-forward for each of the Kafka brokers in your cluster.
 But it stands in the middle between the Kafka clients and the Kafka brokers and changes the advertised hosts and ports to the local addresses of the forwarded ports.
 Your Kafka clients can then connect to the forwarded ports and through Keksposé to the Kafka cluster to send and receive messages. 
+
+If you use `--allow-insecure-tls`, Keksposé can also use TLS-encrypted Kafka listeners.
+In that mode, Keksposé establishes TLS to the upstream brokers, terminates it inside the proxy, rewrites the Kafka protocol responses as usual, and still exposes a plain local TCP stream to your client applications.
+Certificate verification is disabled in this mode, so it is intended only for development and debugging.
+mTLS authentication is not supported.
 
 ```mermaid
 flowchart LR
@@ -85,9 +90,25 @@ Keksposé supports several parameters that can be used to configure it:
 | `--cluster-name` / `-c`  | Name of the Kafka cluster.                                                                                                                                          | `my-cluster`  |
 | `--listener-name`/ `-l`  | Name of the listener that should be exposed. If not set, Keksposé will try to find a suitable listener on its own.                                                  |               |
 | `--starting-port` / `-p` | The starting port number. This port number will be used for the bootstrap connection and will be used as the basis to calculate the per-broker ports.               | `50000`       |
+| `--allow-unready`        | Allow connecting to Kafka clusters even when the Kafka resource is not marked as Ready.                                                                             | `false`       |
+| `--allow-insecure-tls`   | Allow using TLS-encrypted Kafka listeners with certificate verification disabled. Keksposé will terminate TLS upstream and still expose a plaintext local stream.   | `false`       |
 | `--verbose` / `-v`       | Enables verbose logging (can be repeated: -v, -vv, -vvv).                                                                                                           |               |
 
 If you are using the Keksposé binary, you can pass the options from the command line.
+
+### Using TLS-encrypted listeners
+
+By default, Keksposé uses only listeners with `tls: false`.
+If you want to use a TLS-encrypted listener, add `--allow-insecure-tls`.
+
+When `--allow-insecure-tls` is set:
+* Automatic listener selection includes listeners with `tls: true`.
+* An explicitly selected TLS listener is accepted as well.
+* Keksposé connects to the Kafka brokers using TLS, but disables certificate verification.
+* Your local client still connects to Keksposé over a plaintext TCP connection.
+* The encrypted listener might use SASL authentication, but mTLS authentication is not supported.
+
+This mode is meant for local development only.
 
 ### Debugging Kafka clients
 
@@ -108,12 +129,24 @@ However, at this point, only the ApiVersions, Metadata, and FindCoordinator requ
 
 Keksposé 0.9.0 and newer supports only the Strimzi `v1` CRD API version.
 That means it is compatible with Strimzi 0.49.0 and newer.
-Older Kekspos= versions support Strimzi `v1beta2` API and can be used also with Strimzi 0.51 and older.
+Older Keksposé versions support Strimzi `v1beta2` API and can be used also with Strimzi 0.51 and older.
 
 ### Does Keksposé support Kafka clusters with authentication?
 
-Keksposé requires a listener without TLS encryption.
-But it supports Kafka clusters with SASL-based authentication, such as SCRAM-SHA or OAuth. 
+Keksposé supports Kafka clusters with SASL-based authentication, such as SCRAM-SHA or OAuth.
+
+By default, it uses listeners without TLS encryption.
+If needed for local development, you can also use TLS-encrypted listeners with `--allow-insecure-tls`.
+In that mode, Keksposé disables certificate verification for the upstream broker connection.
+
+### Does Keksposé support TLS-encrypted Kafka listeners?
+
+Yes, with `--allow-insecure-tls`.
+
+When this option is used, Keksposé can automatically select a TLS-encrypted listener or use one specified through `--listener-name`.
+It will connect to the brokers using TLS and terminate it inside the proxy, but it does not verify the broker certificates.
+
+This option is intended for development use only.
 
 ### What happens when I scale my Kafka cluster?
 
