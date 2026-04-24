@@ -31,7 +31,7 @@ import (
 
 type PortForwarder struct {
 	KubeConfig *rest.Config
-	Url        *url.URL
+	URL        *url.URL
 	Ports      []string
 	Proxy      *proksy.Proksy
 	Ready      chan struct{}
@@ -41,7 +41,7 @@ type PortForwarder struct {
 func NewPortForwarder(kubeConfig *rest.Config, kubeClient *kubernetes.Clientset, namespace string, podName string, localPort uint32, remotePort uint32, proxy *proksy.Proksy) *PortForwarder {
 	return &PortForwarder{
 		KubeConfig: kubeConfig,
-		Url:        kubeClient.CoreV1().RESTClient().Post().Resource("pods").Namespace(namespace).Name(podName).SubResource("portforward").URL(),
+		URL:        kubeClient.CoreV1().RESTClient().Post().Resource("pods").Namespace(namespace).Name(podName).SubResource("portforward").URL(),
 		Ports:      []string{fmt.Sprintf("%d:%d", localPort, remotePort)},
 		Proxy:      proxy,
 		Ready:      make(chan struct{}),
@@ -56,7 +56,7 @@ func (pf *PortForwarder) ForwardPorts() error {
 		return err
 	}
 
-	dialer := spdy.NewDialer(upgrader, &http.Client{Transport: transport}, http.MethodPost, pf.Url)
+	dialer := spdy.NewDialer(upgrader, &http.Client{Transport: transport}, http.MethodPost, pf.URL)
 	fw, err := proxiedforward.New(dialer, pf.Ports, pf.Stop, pf.Ready, pf.Proxy)
 	if err != nil {
 		slog.Error("Failed to create port forwarder", "error", err)

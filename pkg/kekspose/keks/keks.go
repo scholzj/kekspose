@@ -21,10 +21,10 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
-	"strings"
 
 	strimziapi "github.com/scholzj/strimzi-go/pkg/apis/kafka.strimzi.io/v1"
 	strimziclient "github.com/scholzj/strimzi-go/pkg/client/clientset/versioned"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -60,12 +60,13 @@ func BakeKeks(strimzi strimziclient.Interface, namespace string, clusterName str
 func findKafka(strimzi strimziclient.Interface, namespace string, clusterName string, allowUnready bool) (*strimziapi.Kafka, error) {
 	kafka, err := strimzi.KafkaV1().Kafkas(namespace).Get(context.TODO(), clusterName, v1.GetOptions{})
 	if err != nil {
-		if !strings.Contains(err.Error(), "not found") {
+		if apierrors.IsNotFound(err) {
 			//goland:noinspection GoErrorStringFormat
-			return nil, fmt.Errorf("Kafka cluster %s in namespace %s was not found: %v", clusterName, namespace, err)
-		} else {
-			return nil, fmt.Errorf("failed to get the Kafka cluster: %v", err)
+			return nil, fmt.Errorf("Kafka cluster %s in namespace %s was not found", clusterName, namespace)
 		}
+
+		//goland:noinspection GoErrorStringFormat
+		return nil, fmt.Errorf("failed to get Kafka cluster %s in namespace %s: %w", clusterName, namespace, err)
 	}
 
 	if !isKafkaReady(kafka) {
@@ -166,6 +167,10 @@ func findNodes(strimzi strimziclient.Interface, kafka *strimziapi.Kafka) (map[in
 				}
 			}
 		}
+	}
+
+	if len(nodes) == 0 {
+		return nil, fmt.Errorf("Kafka cluster %s in namespace %s has no broker-role nodes to expose", kafka.Name, kafka.Namespace)
 	}
 
 	slog.Info("Found Kafka nodes", "nodes", nodes)
