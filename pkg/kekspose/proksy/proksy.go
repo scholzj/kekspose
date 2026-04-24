@@ -19,7 +19,6 @@ import (
 	"github.com/scholzj/go-kafka-protocol/api/sharefetch"
 	"github.com/scholzj/go-kafka-protocol/apis"
 	"github.com/scholzj/go-kafka-protocol/protocol"
-	"k8s.io/apimachinery/pkg/util/httpstream"
 	"k8s.io/utils/ptr"
 )
 
@@ -492,14 +491,14 @@ func NewProksy(nodeId int32, portMapping map[int32]uint32) *Proksy {
 	}
 }
 
-func (p *Proksy) Proxy(client net.Conn, broker httpstream.Stream, brokerToClientShutdown chan struct{}, clientToBrokerShutdown chan struct{}) {
+func (p *Proksy) Proxy(client net.Conn, broker io.ReadWriteCloser, brokerToClientShutdown chan struct{}, clientToBrokerShutdown chan struct{}) {
 	correlations := newCorrelationStore()
 
 	go p.BrokerToClient(client, broker, brokerToClientShutdown, correlations)
 	go p.ClientToBroker(client, broker, clientToBrokerShutdown, correlations)
 }
 
-func (p *Proksy) BrokerToClient(client net.Conn, broker httpstream.Stream, shutdownChannel chan struct{}, correlations *correlationStore) {
+func (p *Proksy) BrokerToClient(client net.Conn, broker io.ReadWriteCloser, shutdownChannel chan struct{}, correlations *correlationStore) {
 	defer client.Close()
 	defer close(shutdownChannel)
 
@@ -534,7 +533,7 @@ func (p *Proksy) BrokerToClient(client net.Conn, broker httpstream.Stream, shutd
 
 }
 
-func (p *Proksy) ClientToBroker(client net.Conn, broker httpstream.Stream, shutdownChannel chan struct{}, correlations *correlationStore) {
+func (p *Proksy) ClientToBroker(client net.Conn, broker io.ReadWriteCloser, shutdownChannel chan struct{}, correlations *correlationStore) {
 	defer broker.Close()
 	defer close(shutdownChannel)
 

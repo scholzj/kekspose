@@ -40,13 +40,14 @@ import (
 )
 
 type Kekspose struct {
-	KubeConfigPath string
-	Context        string
-	Namespace      string
-	ClusterName    string
-	ListenerName   string
-	StartingPort   uint32
-	AllowUnready   bool
+	KubeConfigPath   string
+	Context          string
+	Namespace        string
+	ClusterName      string
+	ListenerName     string
+	StartingPort     uint32
+	AllowUnready     bool
+	AllowInsecureTLS bool
 }
 
 func (k *Kekspose) ExposeKafka() error {
@@ -76,9 +77,12 @@ func (k *Kekspose) ExposeKafka() error {
 	}
 
 	// Get Kafka cluster details
-	keks, err := keks2.BakeKeks(strimziclient, k.Namespace, k.ClusterName, k.ListenerName, k.AllowUnready)
+	keks, err := keks2.BakeKeks(strimziclient, k.Namespace, k.ClusterName, k.ListenerName, k.AllowUnready, k.AllowInsecureTLS)
 	if err != nil {
 		return fmt.Errorf("failed to find the Kafka cluster with a suitable listener: %w", err)
+	}
+	if keks.TLS {
+		slog.Warn("Using TLS upstream with certificate verification disabled", "listenerName", keks.ListenerName, "overrideFlag", "--allow-insecure-tls")
 	}
 
 	ctx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -227,7 +231,7 @@ func (k *Kekspose) preparePortForwarders(kubeconfig *rest.Config, kubeclient *ku
 
 	for _, nodeId := range sortedNodeIDs(keks.Nodes) {
 		node := keks.Nodes[nodeId]
-		portForwarder := NewPortForwarder(kubeconfig, kubeclient, k.Namespace, node, portMapping[nodeId], keks.Port, proksy.NewProksy(nodeId, portMapping))
+		portForwarder := NewPortForwarder(kubeconfig, kubeclient, k.Namespace, node, portMapping[nodeId], keks.Port, keks.TLS, proksy.NewProksy(nodeId, portMapping))
 		portForwarders = append(portForwarders, portForwarder)
 	}
 

@@ -22,6 +22,7 @@ limitations under the License.
 */
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -59,6 +60,7 @@ type ProxiedForwarder struct {
 	addresses []listenAddress
 	ports     []ProxiedPort
 	stopChan  <-chan struct{}
+	useTLS    bool
 
 	dialer        httpstream.Dialer
 	streamConn    httpstream.Connection
@@ -166,12 +168,12 @@ func parseAddresses(addressesToParse []string) ([]listenAddress, error) {
 }
 
 // New creates a new ProxiedForwarder with localhost listen addresses.
-func New(dialer httpstream.Dialer, ports []string, stopChan <-chan struct{}, readyChan chan struct{}, proksy *proksy.Proksy) (*ProxiedForwarder, error) {
-	return NewOnAddresses(dialer, []string{"localhost"}, ports, stopChan, readyChan, proksy)
+func New(dialer httpstream.Dialer, ports []string, stopChan <-chan struct{}, readyChan chan struct{}, useTLS bool, proksy *proksy.Proksy) (*ProxiedForwarder, error) {
+	return NewOnAddresses(dialer, []string{"localhost"}, ports, stopChan, readyChan, useTLS, proksy)
 }
 
 // NewOnAddresses creates a new ProxiedForwarder with custom listen addresses.
-func NewOnAddresses(dialer httpstream.Dialer, addresses []string, ports []string, stopChan <-chan struct{}, readyChan chan struct{}, proksy *proksy.Proksy) (*ProxiedForwarder, error) {
+func NewOnAddresses(dialer httpstream.Dialer, addresses []string, ports []string, stopChan <-chan struct{}, readyChan chan struct{}, useTLS bool, proksy *proksy.Proksy) (*ProxiedForwarder, error) {
 	if len(addresses) == 0 {
 		return nil, errors.New("you must specify at least 1 address")
 	}
@@ -192,6 +194,7 @@ func NewOnAddresses(dialer httpstream.Dialer, addresses []string, ports []string
 		ports:     parsedPorts,
 		stopChan:  stopChan,
 		Ready:     readyChan,
+		useTLS:    useTLS,
 		proksy:    proksy,
 	}, nil
 }
@@ -381,10 +384,16 @@ func (pf *ProxiedForwarder) handleConnection(conn net.Conn, port ProxiedPort) {
 	}
 	defer pf.streamConn.RemoveStreams(dataStream)
 
+	brokerConn, err := establishBrokerConn(dataStream, pf.useTLS)
+	if err != nil {
+		runtime.HandleError(fmt.Errorf("error establishing TLS for port %d -> %d: %v", port.Local, port.Remote, err))
+		return
+	}
+
 	// Start proxying the connection
 	clientToBroker := make(chan struct{})
 	brokerToClient := make(chan struct{})
-	go pf.proksy.Proxy(conn, dataStream, brokerToClient, clientToBroker)
+	go pf.proksy.Proxy(conn, brokerConn, brokerToClient, clientToBroker)
 
 	// wait for either a local->remote error or for copying from remote->local to finish
 	select {
@@ -403,6 +412,20 @@ func (pf *ProxiedForwarder) handleConnection(conn net.Conn, port ProxiedPort) {
 		runtime.HandleError(err)
 		pf.streamConn.Close()
 	}
+}
+
+func establishBrokerConn(dataStream httpstream.Stream, useTLS bool) (io.ReadWriteCloser, error) {
+	brokerConn := io.ReadWriteCloser(dataStream)
+	if !useTLS {
+		return brokerConn, nil
+	}
+
+	tlsConn := tls.Client(newStreamConn(dataStream), &tls.Config{InsecureSkipVerify: true})
+	if err := tlsConn.Handshake(); err != nil {
+		return nil, err
+	}
+
+	return tlsConn, nil
 }
 
 // Close stops all listeners of ProxiedForwarder.
