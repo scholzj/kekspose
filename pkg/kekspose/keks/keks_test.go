@@ -3,6 +3,7 @@ package keks
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"log/slog"
 	"strings"
 	"testing"
@@ -11,6 +12,8 @@ import (
 	"github.com/scholzj/strimzi-go/pkg/client/clientset/versioned/fake"
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	k8stesting "k8s.io/client-go/testing"
 )
 
 func TestNodePoolBasedCluster(t *testing.T) {
@@ -166,6 +169,27 @@ func TestUnreadyCluster(t *testing.T) {
 	assert.Nil(t, keks)
 }
 
+func TestMissingCluster(t *testing.T) {
+	client := fake.NewSimpleClientset()
+
+	keks, err := BakeKeks(client, "my-namespace", "my-cluster", "internal", false)
+	assert.NotNil(t, err)
+	assert.Equal(t, "Kafka cluster my-cluster in namespace my-namespace was not found", err.Error())
+	assert.Nil(t, keks)
+}
+
+func TestGenericGetFailure(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	client.PrependReactor("get", "kafkas", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+		return true, nil, fmt.Errorf("boom")
+	})
+
+	keks, err := BakeKeks(client, "my-namespace", "my-cluster", "internal", false)
+	assert.NotNil(t, err)
+	assert.Equal(t, "failed to get Kafka cluster my-cluster in namespace my-namespace: boom", err.Error())
+	assert.Nil(t, keks)
+}
+
 func TestUnreadyClusterWithOverride(t *testing.T) {
 	kafka := &kafkav1.Kafka{
 		ObjectMeta: metav1.ObjectMeta{
@@ -184,6 +208,31 @@ func TestUnreadyClusterWithOverride(t *testing.T) {
 			},
 		},
 	}
+	volumeID := int32(0)
+	nodePool := &kafkav1.KafkaNodePool{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "pool-a",
+			Namespace: "my-namespace",
+			Labels: map[string]string{
+				"strimzi.io/cluster": "my-cluster",
+			},
+		},
+		Spec: &kafkav1.KafkaNodePoolSpec{
+			Replicas: 1,
+			Roles:    []kafkav1.ProcessRoles{kafkav1.BROKER_PROCESSROLES},
+			Storage: &kafkav1.Storage{
+				Type: kafkav1.JBOD_STORAGETYPE,
+				Volumes: []kafkav1.SingleVolumeStorage{{
+					Id:   &volumeID,
+					Type: kafkav1.PERSISTENT_CLAIM_SINGLEVOLUMESTORAGETYPE,
+					Size: "100Gi",
+				}},
+			},
+		},
+		Status: &kafkav1.KafkaNodePoolStatus{
+			NodeIds: []int32{0},
+		},
+	}
 
 	var logOutput bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&logOutput, nil))
@@ -196,6 +245,8 @@ func TestUnreadyClusterWithOverride(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	_, err := client.KafkaV1().Kafkas("my-namespace").Create(context.TODO(), kafka, metav1.CreateOptions{})
 	assert.Nil(t, err)
+	_, err = client.KafkaV1().KafkaNodePools("my-namespace").Create(context.TODO(), nodePool, metav1.CreateOptions{})
+	assert.Nil(t, err)
 
 	keks, err := BakeKeks(client, "my-namespace", "my-cluster", "internal", true)
 	assert.Nil(t, err)
@@ -204,6 +255,67 @@ func TestUnreadyClusterWithOverride(t *testing.T) {
 	assert.Contains(t, logOutput.String(), "Kafka cluster is not Ready, continuing because the readiness check was overridden")
 	assert.Contains(t, logOutput.String(), "overrideFlag=--allow-unready")
 	assert.NotEmpty(t, strings.TrimSpace(logOutput.String()))
+}
+
+func TestClusterWithoutBrokerNodes(t *testing.T) {
+	kafka := &kafkav1.Kafka{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "my-cluster",
+			Namespace: "my-namespace",
+		},
+		Spec: &kafkav1.KafkaSpec{
+			Kafka: &kafkav1.KafkaClusterSpec{
+				Version: "3.9.0",
+				Listeners: []kafkav1.GenericKafkaListener{{
+					Name: "internal",
+					Type: kafkav1.INTERNAL_KAFKALISTENERTYPE,
+					Tls:  false,
+					Port: 9092,
+				}},
+			},
+		},
+		Status: &kafkav1.KafkaStatus{
+			Conditions: []kafkav1.Condition{{
+				Type:   "Ready",
+				Status: "True",
+			}},
+		},
+	}
+	volumeID := int32(0)
+	nodePool := &kafkav1.KafkaNodePool{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "pool-a",
+			Namespace: "my-namespace",
+			Labels: map[string]string{
+				"strimzi.io/cluster": "my-cluster",
+			},
+		},
+		Spec: &kafkav1.KafkaNodePoolSpec{
+			Replicas: 1,
+			Roles:    []kafkav1.ProcessRoles{kafkav1.CONTROLLER_PROCESSROLES},
+			Storage: &kafkav1.Storage{
+				Type: kafkav1.JBOD_STORAGETYPE,
+				Volumes: []kafkav1.SingleVolumeStorage{{
+					Id:   &volumeID,
+					Type: kafkav1.PERSISTENT_CLAIM_SINGLEVOLUMESTORAGETYPE,
+					Size: "100Gi",
+				}},
+			},
+		},
+		Status: &kafkav1.KafkaNodePoolStatus{
+			NodeIds: []int32{0},
+		},
+	}
+
+	client := fake.NewSimpleClientset()
+	_, err := client.KafkaV1().Kafkas("my-namespace").Create(context.TODO(), kafka, metav1.CreateOptions{})
+	assert.Nil(t, err)
+	_, err = client.KafkaV1().KafkaNodePools("my-namespace").Create(context.TODO(), nodePool, metav1.CreateOptions{})
+	assert.Nil(t, err)
+
+	keks, err := BakeKeks(client, "my-namespace", "my-cluster", "internal", false)
+	assert.Nil(t, keks)
+	assert.Equal(t, "Kafka cluster my-cluster in namespace my-namespace has no broker-role nodes to expose", err.Error())
 }
 
 func TestNoTlsListener(t *testing.T) {

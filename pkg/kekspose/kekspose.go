@@ -17,6 +17,7 @@ limitations under the License.
 package kekspose
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net"
@@ -26,6 +27,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 
 	keks2 "github.com/scholzj/kekspose/pkg/kekspose/keks"
@@ -47,46 +49,42 @@ type Kekspose struct {
 	AllowUnready   bool
 }
 
-func (k *Kekspose) ExposeKafka() {
+func (k *Kekspose) ExposeKafka() error {
 	k.resolveKubeConfigPath()
 	clientConfig := k.newClientConfig()
 
-	if err := k.resolveNamespace(clientConfig); err != nil {
-		slog.Error("Failed to determine the namespace", "error", err)
-		return
+	if err := k.resolveNamespace(); err != nil {
+		return fmt.Errorf("failed to determine the namespace: %w", err)
 	}
 
 	kubeconfig, err := clientConfig.ClientConfig()
 	if err != nil {
-		slog.Error("Failed to create Kubernetes client configuration", "error", err)
-		return
+		return fmt.Errorf("failed to create Kubernetes client configuration: %w", err)
 	}
 	kubeconfig.WarningHandlerWithContext = rest.NoWarnings{}
 
 	// Create a Kubernetes client
 	kubeclient, err := kubernetes.NewForConfig(kubeconfig)
 	if err != nil {
-		slog.Error("Failed to create Kubernetes client", "error", err)
-		return
+		return fmt.Errorf("failed to create Kubernetes client: %w", err)
 	}
 
 	// Create a Strimzi client
 	strimziclient, err := strimzi.NewForConfig(kubeconfig)
 	if err != nil {
-		slog.Error("Failed to create Strimzi client", "error", err)
-		return
+		return fmt.Errorf("failed to create Strimzi client: %w", err)
 	}
 
 	// Get Kafka cluster details
 	keks, err := keks2.BakeKeks(strimziclient, k.Namespace, k.ClusterName, k.ListenerName, k.AllowUnready)
 	if err != nil {
-		slog.Error("Failed to find the Kafka cluster with a suitable listener", "error", err)
-		return
+		return fmt.Errorf("failed to find the Kafka cluster with a suitable listener: %w", err)
 	}
 
-	// Shutdown channels
-	shutdown := make(chan struct{})
-	errors := make(chan error)
+	ctx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stopSignals()
+
+	errors := make(chan error, len(keks.Nodes))
 
 	// Prepare the mapping
 	portMapping := k.preparePortMapping(keks)
@@ -94,46 +92,53 @@ func (k *Kekspose) ExposeKafka() {
 	// Prepare forwarders
 	portForwarders := k.preparePortForwarders(kubeconfig, kubeclient, keks, portMapping)
 
+	var stopOnce sync.Once
+	stopPortForwarders := func() {
+		stopOnce.Do(func() {
+			for _, pf := range portForwarders {
+				id := pf.Proxy.NodeId
+				slog.Info("Stopping port forwarding between localhost and Kubernetes", "localPort", portMapping[id], "podName", keks.Nodes[id], "remotePort", keks.Port, "namespace", k.Namespace)
+				close(pf.Stop)
+			}
+		})
+	}
+
 	// Start forwarders
 	for _, pf := range portForwarders {
 		id := pf.Proxy.NodeId
 		slog.Info("Starting port forwarding between localhost and Kubernetes", "localPort", portMapping[id], "podName", keks.Nodes[id], "remotePort", keks.Port, "namespace", k.Namespace)
 
-		go pf.ForwardPorts()
+		go func(pf *PortForwarder) {
+			if err := pf.ForwardPorts(); err != nil {
+				errors <- err
+			}
+		}(pf)
 	}
 
 	// Wait for forwarders readiness
 	for _, pf := range portForwarders {
-		<-pf.Ready
+		select {
+		case <-pf.Ready:
+		case err := <-errors:
+			stopPortForwarders()
+			return fmt.Errorf("failed forwarding ports: %w", err)
+		}
 	}
 
 	slog.Info("Port forwarding is ready")
 	slog.Info("Use the following address to access the Kafka cluster", "address", k.bootstrapAddress(portMapping))
 	slog.Info("Press Ctrl+C to stop port forwarding")
 
-	c := make(chan os.Signal)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-c
-		slog.Info("Received Ctrl+C, stopping port forwarding")
-
-		// Stopping port forwarders
-		for _, pf := range portForwarders {
-			id := pf.Proxy.NodeId
-			slog.Info("Stopping port forwarding between localhost and Kubernetes", "localPort", portMapping[id], "podName", keks.Nodes[id], "remotePort", keks.Port, "namespace", k.Namespace)
-			close(pf.Stop)
-		}
-		close(shutdown)
-	}()
-
 	// Wait for shutdown
 	select {
-	case <-shutdown:
+	case <-ctx.Done():
+		slog.Info("Received shutdown signal, stopping port forwarding")
+		stopPortForwarders()
 		slog.Info("Shutting down")
-		os.Exit(0)
+		return nil
 	case err := <-errors:
-		slog.Error("Failed forwarding ports", "error", err)
-		os.Exit(1)
+		stopPortForwarders()
+		return fmt.Errorf("failed forwarding ports: %w", err)
 	}
 }
 
@@ -166,7 +171,7 @@ func (k *Kekspose) newClientConfig() clientcmd.ClientConfig {
 	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, overrides)
 }
 
-func (k *Kekspose) resolveNamespace(clientConfig clientcmd.ClientConfig) error {
+func (k *Kekspose) resolveNamespace() error {
 	if k.Namespace != "" {
 		return nil
 	}
@@ -209,13 +214,7 @@ func (k *Kekspose) preparePortMapping(keks *keks2.Keks) map[int32]uint32 {
 	portMapping := make(map[int32]uint32)
 	nextPort := k.StartingPort
 
-	nodeIds := make([]int32, 0, len(keks.Nodes))
-	for nodeId := range keks.Nodes {
-		nodeIds = append(nodeIds, nodeId)
-	}
-	slices.Sort(nodeIds)
-
-	for _, nodeId := range nodeIds {
+	for _, nodeId := range sortedNodeIDs(keks.Nodes) {
 		portMapping[nodeId] = nextPort
 		nextPort++
 	}
@@ -226,13 +225,7 @@ func (k *Kekspose) preparePortMapping(keks *keks2.Keks) map[int32]uint32 {
 func (k *Kekspose) preparePortForwarders(kubeconfig *rest.Config, kubeclient *kubernetes.Clientset, keks *keks2.Keks, portMapping map[int32]uint32) []*PortForwarder {
 	portForwarders := make([]*PortForwarder, 0, len(keks.Nodes))
 
-	nodeIds := make([]int32, 0, len(keks.Nodes))
-	for nodeId := range keks.Nodes {
-		nodeIds = append(nodeIds, nodeId)
-	}
-	slices.Sort(nodeIds)
-
-	for _, nodeId := range nodeIds {
+	for _, nodeId := range sortedNodeIDs(keks.Nodes) {
 		node := keks.Nodes[nodeId]
 		portForwarder := NewPortForwarder(kubeconfig, kubeclient, k.Namespace, node, portMapping[nodeId], keks.Port, proksy.NewProksy(nodeId, portMapping))
 		portForwarders = append(portForwarders, portForwarder)
@@ -244,15 +237,19 @@ func (k *Kekspose) preparePortForwarders(kubeconfig *rest.Config, kubeclient *ku
 func (k *Kekspose) bootstrapAddress(portMapping map[int32]uint32) string {
 	addresses := make([]string, 0, len(portMapping))
 
-	nodeIds := make([]int32, 0, len(portMapping))
-	for nodeId := range portMapping {
-		nodeIds = append(nodeIds, nodeId)
-	}
-	slices.Sort(nodeIds)
-
-	for _, nodeId := range nodeIds {
+	for _, nodeId := range sortedNodeIDs(portMapping) {
 		addresses = append(addresses, net.JoinHostPort("localhost", strconv.FormatUint(uint64(portMapping[nodeId]), 10)))
 	}
 
 	return strings.Join(addresses, ",")
+}
+
+func sortedNodeIDs[T any](nodes map[int32]T) []int32 {
+	nodeIDs := make([]int32, 0, len(nodes))
+	for nodeID := range nodes {
+		nodeIDs = append(nodeIDs, nodeID)
+	}
+	slices.Sort(nodeIDs)
+
+	return nodeIDs
 }

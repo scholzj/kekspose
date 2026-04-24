@@ -42,7 +42,7 @@ users:
 `)
 
 	k := Kekspose{KubeConfigPath: kubeconfig, Context: "beta"}
-	err := k.resolveNamespace(k.newClientConfig())
+	err := k.resolveNamespace()
 
 	require.NoError(t, err)
 	assert.Equal(t, "beta-ns", k.Namespace)
@@ -69,7 +69,7 @@ users:
 `)
 
 	k := Kekspose{KubeConfigPath: kubeconfig}
-	err := k.resolveNamespace(k.newClientConfig())
+	err := k.resolveNamespace()
 
 	require.NoError(t, err)
 	assert.Equal(t, "alpha-ns", k.Namespace)
@@ -99,9 +99,34 @@ users:
 `)
 
 	k := Kekspose{KubeConfigPath: kubeconfig, Context: "beta"}
-	err := k.resolveNamespace(k.newClientConfig())
+	err := k.resolveNamespace()
 
 	require.EqualError(t, err, "please use the --namespace / -n option to specify it")
+}
+
+func TestExposeKafkaReturnsNamespaceResolutionError(t *testing.T) {
+	kubeconfig := writeTestKubeconfig(t, `apiVersion: v1
+kind: Config
+current-context: alpha
+contexts:
+- name: alpha
+  context:
+    cluster: test
+    user: test
+clusters:
+- name: test
+  cluster:
+    server: https://example.com
+users:
+- name: test
+  user:
+    token: test
+`)
+
+	k := Kekspose{KubeConfigPath: kubeconfig}
+	err := k.ExposeKafka()
+
+	require.EqualError(t, err, "failed to determine the namespace: please use the --namespace / -n option to specify it")
 }
 
 func writeTestKubeconfig(t *testing.T, kubeconfig string) string {

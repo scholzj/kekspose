@@ -35,10 +35,12 @@ var verbose int
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "kekspose",
-	Short: "Expose your Kafka cluster outside your Minikube, Kind, or Docker Desktop clusters",
-	Long:  `Expose your Kafka cluster outside your Minikube, Kind, or Docker Desktop clusters`,
-	Run: func(cmd *cobra.Command, args []string) {
+	Use:           "kekspose",
+	Short:         "Expose your Kafka cluster outside your Minikube, Kind, or Docker Desktop clusters",
+	Long:          `Expose your Kafka cluster outside your Minikube, Kind, or Docker Desktop clusters`,
+	SilenceErrors: true,
+	SilenceUsage:  true,
+	RunE: func(cmd *cobra.Command, args []string) error {
 		// Configure the logging
 		if verbose <= 0 {
 			slog.SetLogLoggerLevel(slog.LevelInfo)
@@ -57,7 +59,13 @@ var rootCmd = &cobra.Command{
 			StartingPort:   startingPort,
 			AllowUnready:   allowUnready,
 		}
-		kekspose.ExposeKafka()
+
+		if err := kekspose.ExposeKafka(); err != nil {
+			slog.Error("Kekspose failed", "error", err)
+			return err
+		}
+
+		return nil
 	},
 }
 
