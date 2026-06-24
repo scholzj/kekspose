@@ -62,12 +62,12 @@ func (c *correlationStore) snapshot() map[int32]protocol.RequestHeader {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	copy := make(map[int32]protocol.RequestHeader, len(c.correlations))
+	mapCopy := make(map[int32]protocol.RequestHeader, len(c.correlations))
 	for correlationID, header := range c.correlations {
-		copy[correlationID] = header
+		mapCopy[correlationID] = header
 	}
 
-	return copy
+	return mapCopy
 }
 
 func (c *correlationStore) set(correlationID int32, header protocol.RequestHeader) {
@@ -204,7 +204,7 @@ func (p *Proksy) rewriteRequest(request *protocol.Request) error {
 
 func (p *Proksy) rewriteProduceResponse(response *protocol.Response) error {
 	produceResponse := produce.ProduceResponse{}
-	if err := produceResponse.Read(*response); err != nil {
+	if err := produceResponse.Read(response); err != nil {
 		return fmt.Errorf("decode Produce response: %w", err)
 	}
 
@@ -232,7 +232,7 @@ func (p *Proksy) rewriteProduceResponse(response *protocol.Response) error {
 
 func (p *Proksy) rewriteFetchResponse(response *protocol.Response) error {
 	fetchResponse := fetch.FetchResponse{}
-	if err := fetchResponse.Read(*response); err != nil {
+	if err := fetchResponse.Read(response); err != nil {
 		return fmt.Errorf("decode Fetch response: %w", err)
 	}
 
@@ -260,7 +260,7 @@ func (p *Proksy) rewriteFetchResponse(response *protocol.Response) error {
 
 func (p *Proksy) rewriteMetadataResponse(response *protocol.Response) error {
 	metadataResponse := metadata.MetadataResponse{}
-	if err := metadataResponse.Read(*response); err != nil {
+	if err := metadataResponse.Read(response); err != nil {
 		return fmt.Errorf("decode Metadata response: %w", err)
 	}
 
@@ -286,7 +286,7 @@ func (p *Proksy) rewriteMetadataResponse(response *protocol.Response) error {
 
 func (p *Proksy) rewriteFindCoordinatorResponse(response *protocol.Response) error {
 	findCoordinatorResponse := findcoordinator.FindCoordinatorResponse{}
-	if err := findCoordinatorResponse.Read(*response); err != nil {
+	if err := findCoordinatorResponse.Read(response); err != nil {
 		return fmt.Errorf("decode FindCoordinator response: %w", err)
 	}
 
@@ -334,7 +334,7 @@ func (p *Proksy) rewriteFindCoordinatorResponse(response *protocol.Response) err
 
 func (p *Proksy) rewriteAPIVersionsResponse(response *protocol.Response) error {
 	apiVersionsResponse := apiversions.ApiVersionsResponse{}
-	if err := apiVersionsResponse.Read(*response); err != nil {
+	if err := apiVersionsResponse.Read(response); err != nil {
 		return fmt.Errorf("decode ApiVersions response: %w", err)
 	}
 
@@ -351,7 +351,7 @@ func (p *Proksy) rewriteAPIVersionsResponse(response *protocol.Response) error {
 
 func (p *Proksy) rewriteDescribeClusterResponse(response *protocol.Response) error {
 	describeClusterResponse := describecluster.DescribeClusterResponse{}
-	if err := describeClusterResponse.Read(*response); err != nil {
+	if err := describeClusterResponse.Read(response); err != nil {
 		return fmt.Errorf("decode DescribeCluster response: %w", err)
 	}
 
@@ -379,7 +379,7 @@ func (p *Proksy) rewriteDescribeClusterResponse(response *protocol.Response) err
 
 func (p *Proksy) rewriteShareFetchResponse(response *protocol.Response) error {
 	shareFetchResponse := sharefetch.ShareFetchResponse{}
-	if err := shareFetchResponse.Read(*response); err != nil {
+	if err := shareFetchResponse.Read(response); err != nil {
 		return fmt.Errorf("decode ShareFetch response: %w", err)
 	}
 
@@ -407,7 +407,7 @@ func (p *Proksy) rewriteShareFetchResponse(response *protocol.Response) error {
 
 func (p *Proksy) rewriteShareAcknowledgeResponse(response *protocol.Response) error {
 	shareAcknowledgeResponse := shareacknowledge.ShareAcknowledgeResponse{}
-	if err := shareAcknowledgeResponse.Read(*response); err != nil {
+	if err := shareAcknowledgeResponse.Read(response); err != nil {
 		return fmt.Errorf("decode ShareAcknowledge response: %w", err)
 	}
 
@@ -435,7 +435,7 @@ func (p *Proksy) rewriteShareAcknowledgeResponse(response *protocol.Response) er
 
 func (p *Proksy) rewriteAPIVersionsRequest(request *protocol.Request) error {
 	apiVersionsRequest := apiversions.ApiVersionsRequest{}
-	if err := apiVersionsRequest.Read(*request); err != nil {
+	if err := apiVersionsRequest.Read(request); err != nil {
 		return fmt.Errorf("decode ApiVersions request: %w", err)
 	}
 
@@ -452,7 +452,7 @@ func (p *Proksy) rewriteAPIVersionsRequest(request *protocol.Request) error {
 
 func (p *Proksy) rewriteFindCoordinatorRequest(request *protocol.Request) error {
 	findCoordinatorRequest := findcoordinator.FindCoordinatorRequest{}
-	if err := findCoordinatorRequest.Read(*request); err != nil {
+	if err := findCoordinatorRequest.Read(request); err != nil {
 		return fmt.Errorf("decode FindCoordinator request: %w", err)
 	}
 
@@ -469,7 +469,7 @@ func (p *Proksy) rewriteFindCoordinatorRequest(request *protocol.Request) error 
 
 func (p *Proksy) rewriteMetadataRequest(request *protocol.Request) error {
 	metadataRequest := metadata.MetadataRequest{}
-	if err := metadataRequest.Read(*request); err != nil {
+	if err := metadataRequest.Read(request); err != nil {
 		return fmt.Errorf("decode Metadata request: %w", err)
 	}
 

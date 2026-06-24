@@ -30,7 +30,7 @@ func TestRewriteMetadataResponse(t *testing.T) {
 	require.NoError(t, p.rewriteResponse(&response))
 
 	decoded := metadata.MetadataResponse{}
-	require.NoError(t, decoded.Read(response))
+	require.NoError(t, decoded.Read(&response))
 	require.NotNil(t, decoded.Brokers)
 	assert.Len(t, *decoded.Brokers, 2)
 	assert.Equal(t, "localhost", *(*decoded.Brokers)[0].Host)
@@ -50,7 +50,7 @@ func TestRewriteFindCoordinatorResponse(t *testing.T) {
 	require.NoError(t, p.rewriteResponse(&response))
 
 	decoded := findcoordinator.FindCoordinatorResponse{}
-	require.NoError(t, decoded.Read(response))
+	require.NoError(t, decoded.Read(&response))
 	require.NotNil(t, decoded.Host)
 	assert.Equal(t, "localhost", *decoded.Host)
 	assert.Equal(t, int32(50007), decoded.Port)
@@ -67,7 +67,7 @@ func TestRewriteFindCoordinatorResponseKeepsSentinelNodeID(t *testing.T) {
 	require.NoError(t, p.rewriteResponse(&response))
 
 	decoded := findcoordinator.FindCoordinatorResponse{}
-	require.NoError(t, decoded.Read(response))
+	require.NoError(t, decoded.Read(&response))
 	require.NotNil(t, decoded.Host)
 	assert.Equal(t, int32(-1), decoded.NodeId)
 	assert.Equal(t, "unavailable", *decoded.Host)
