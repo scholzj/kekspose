@@ -17,9 +17,12 @@ limitations under the License.
 package cmd
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 
+	"github.com/scholzj/go-kafka-protocol/messages"
 	"github.com/scholzj/kekspose/pkg/kekspose"
 	"github.com/spf13/cobra"
 )
@@ -33,6 +36,8 @@ var startingPort uint32
 var allowUnready bool
 var allowInsecureTLS bool
 var verbose int
+var logApis []string
+var traceApis []string
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -51,6 +56,15 @@ var rootCmd = &cobra.Command{
 			slog.SetLogLoggerLevel(slog.Level(-10))
 		}
 
+		logKeys, err := resolveAPIKeys(logApis)
+		if err != nil {
+			return fmt.Errorf("invalid --log-api: %w", err)
+		}
+		bodyKeys, err := resolveAPIKeys(traceApis)
+		if err != nil {
+			return fmt.Errorf("invalid --trace-api: %w", err)
+		}
+
 		kekspose := kekspose.Kekspose{
 			KubeConfigPath:   kubeconfigpath,
 			Context:          contextName,
@@ -60,6 +74,8 @@ var rootCmd = &cobra.Command{
 			StartingPort:     startingPort,
 			AllowUnready:     allowUnready,
 			AllowInsecureTLS: allowInsecureTLS,
+			LogAPIKeys:       logKeys,
+			BodyAPIKeys:      bodyKeys,
 		}
 
 		if err := kekspose.ExposeKafka(); err != nil {
@@ -69,6 +85,37 @@ var rootCmd = &cobra.Command{
 
 		return nil
 	},
+}
+
+// resolveAPIKeys turns a list of Kafka API names (e.g. "Metadata", "Produce") into their numeric
+// API keys, matching case-insensitively against the protocol registry. It returns an error naming
+// any API it does not recognise, so a typo fails fast rather than silently logging nothing.
+func resolveAPIKeys(names []string) ([]int16, error) {
+	if len(names) == 0 {
+		return nil, nil
+	}
+
+	// Build a case-insensitive name -> key index from the generated registry.
+	index := make(map[string]int16)
+	for k := int16(0); k < 1000; k++ {
+		if name := messages.Name(k); name != "Unknown" {
+			index[strings.ToLower(name)] = k
+		}
+	}
+
+	keys := make([]int16, 0, len(names))
+	for _, name := range names {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		key, ok := index[strings.ToLower(name)]
+		if !ok {
+			return nil, fmt.Errorf("unknown Kafka API %q", name)
+		}
+		keys = append(keys, key)
+	}
+	return keys, nil
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -99,4 +146,6 @@ func init() {
 	rootCmd.Flags().BoolVar(&allowUnready, "allow-unready", false, "Allow connecting to Kafka clusters even when the Kafka resource is not Ready.")
 	rootCmd.Flags().BoolVar(&allowInsecureTLS, "allow-insecure-tls", false, "Allow using TLS-encrypted Kafka listeners with certificate verification disabled.")
 	rootCmd.Flags().CountVarP(&verbose, "verbose", "v", "Enables verbose logging (can be repeated: -v, -vv, -vvv).")
+	rootCmd.Flags().StringSliceVar(&logApis, "log-api", nil, "Restrict RPC logging to these Kafka APIs (comma-separated names, e.g. Metadata,Produce). Default: all APIs. Requires -v.")
+	rootCmd.Flags().StringSliceVar(&traceApis, "trace-api", nil, "Decode and log full message bodies only for these Kafka APIs (comma-separated names, e.g. Metadata). Default: all logged APIs. Requires -vv.")
 }

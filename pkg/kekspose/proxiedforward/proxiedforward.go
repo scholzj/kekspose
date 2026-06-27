@@ -22,6 +22,7 @@ limitations under the License.
 */
 
 import (
+	"context"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -34,7 +35,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/scholzj/kekspose/pkg/kekspose/proksy"
+	"github.com/scholzj/proksy"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/httpstream"
 	"k8s.io/apimachinery/pkg/util/runtime"
@@ -56,7 +57,7 @@ var (
 // ProxiedForwarder knows how to listen for local connections and forward them to
 // a remote pod via an upgraded HTTP request.
 type ProxiedForwarder struct {
-	proksy    *proksy.Proksy
+	engine    *proksy.Engine
 	addresses []listenAddress
 	ports     []ProxiedPort
 	stopChan  <-chan struct{}
@@ -168,12 +169,12 @@ func parseAddresses(addressesToParse []string) ([]listenAddress, error) {
 }
 
 // New creates a new ProxiedForwarder with localhost listen addresses.
-func New(dialer httpstream.Dialer, ports []string, stopChan <-chan struct{}, readyChan chan struct{}, useTLS bool, proksy *proksy.Proksy) (*ProxiedForwarder, error) {
-	return NewOnAddresses(dialer, []string{"localhost"}, ports, stopChan, readyChan, useTLS, proksy)
+func New(dialer httpstream.Dialer, ports []string, stopChan <-chan struct{}, readyChan chan struct{}, useTLS bool, engine *proksy.Engine) (*ProxiedForwarder, error) {
+	return NewOnAddresses(dialer, []string{"localhost"}, ports, stopChan, readyChan, useTLS, engine)
 }
 
 // NewOnAddresses creates a new ProxiedForwarder with custom listen addresses.
-func NewOnAddresses(dialer httpstream.Dialer, addresses []string, ports []string, stopChan <-chan struct{}, readyChan chan struct{}, useTLS bool, proksy *proksy.Proksy) (*ProxiedForwarder, error) {
+func NewOnAddresses(dialer httpstream.Dialer, addresses []string, ports []string, stopChan <-chan struct{}, readyChan chan struct{}, useTLS bool, engine *proksy.Engine) (*ProxiedForwarder, error) {
 	if len(addresses) == 0 {
 		return nil, errors.New("you must specify at least 1 address")
 	}
@@ -195,7 +196,7 @@ func NewOnAddresses(dialer httpstream.Dialer, addresses []string, ports []string
 		stopChan:  stopChan,
 		Ready:     readyChan,
 		useTLS:    useTLS,
-		proksy:    proksy,
+		engine:    engine,
 	}, nil
 }
 
@@ -390,16 +391,19 @@ func (pf *ProxiedForwarder) handleConnection(conn net.Conn, port ProxiedPort) {
 		return
 	}
 
-	// Start proxying the connection
-	clientToBroker := make(chan struct{})
-	brokerToClient := make(chan struct{})
-	go pf.proksy.Proxy(conn, brokerConn, brokerToClient, clientToBroker)
-
-	// wait for either a local->remote error or for copying from remote->local to finish
-	select {
-	case <-brokerToClient:
-	case <-clientToBroker:
-	}
+	// Proxy the connection. Engine.Proxy blocks until both directions are torn down (an EOF or error
+	// on either side cancels the other), so it replaces the old goroutine + shutdown-channel dance.
+	// Tie its lifetime to the forwarder's stop signal so a shutdown unblocks an idle connection.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		select {
+		case <-pf.stopChan:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+	_ = pf.engine.Proxy(ctx, conn, brokerConn)
 
 	// reset dataStream to discard any unsent data, preventing port forwarding from being blocked.
 	// we must reset dataStream before waiting on errorChan, otherwise,

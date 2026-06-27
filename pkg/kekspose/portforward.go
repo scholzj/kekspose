@@ -22,8 +22,8 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/scholzj/kekspose/pkg/kekspose/proksy"
 	"github.com/scholzj/kekspose/pkg/kekspose/proxiedforward"
+	"github.com/scholzj/proksy"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/transport/spdy"
@@ -32,17 +32,19 @@ import (
 type PortForwarder struct {
 	KubeConfig *rest.Config
 	URL        *url.URL
+	NodeId     int32
 	Ports      []string
 	UseTLS     bool
-	Proxy      *proksy.Proksy
+	Proxy      *proksy.Engine
 	Ready      chan struct{}
 	Stop       chan struct{}
 }
 
-func NewPortForwarder(kubeConfig *rest.Config, kubeClient *kubernetes.Clientset, namespace string, podName string, localPort uint32, remotePort uint32, useTLS bool, proxy *proksy.Proksy) *PortForwarder {
+func NewPortForwarder(kubeConfig *rest.Config, kubeClient *kubernetes.Clientset, namespace string, podName string, nodeId int32, localPort uint32, remotePort uint32, useTLS bool, proxy *proksy.Engine) *PortForwarder {
 	return &PortForwarder{
 		KubeConfig: kubeConfig,
 		URL:        kubeClient.CoreV1().RESTClient().Post().Resource("pods").Namespace(namespace).Name(podName).SubResource("portforward").URL(),
+		NodeId:     nodeId,
 		Ports:      []string{fmt.Sprintf("%d:%d", localPort, remotePort)},
 		UseTLS:     useTLS,
 		Proxy:      proxy,

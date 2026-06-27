@@ -93,6 +93,8 @@ Keksposé supports several parameters that can be used to configure it:
 | `--allow-unready`        | Allow connecting to Kafka clusters even when the Kafka resource is not marked as Ready.                                                                             | `false`       |
 | `--allow-insecure-tls`   | Allow using TLS-encrypted Kafka listeners with certificate verification disabled. Keksposé will terminate TLS upstream and still expose a plaintext local stream.   | `false`       |
 | `--verbose` / `-v`       | Enables verbose logging (can be repeated: -v, -vv, -vvv).                                                                                                           |               |
+| `--log-api`              | Restrict RPC logging to these Kafka APIs (comma-separated names, e.g. `Metadata,Produce`). Default: all APIs. Requires `-v`.                                         | all APIs      |
+| `--trace-api`            | Decode and log full message bodies only for these Kafka APIs (comma-separated names, e.g. `Metadata`). Default: all logged APIs. Requires `-vv`.                    | all APIs      |
 
 If you are using the Keksposé binary, you can pass the options from the command line.
 
@@ -115,13 +117,18 @@ This mode is meant for local development only.
 In the verbose mode (`-v` or `--verbose`), Keksposé will log high level information about the request and responses it is forwarding.
 For example:
 ```
--> Received request: node=2000; size=52; apiKey=1; version=17; correlationID=694; clientId=console-consumer; bodySize=26 bytes
-<- Received response: node=2000; size=17; apiKey=1; version=17; correlationID=694; clientId=console-consumer; bodySize=13 bytes
+-> request node=2000 api=Fetch apiKey=1 apiVersion=17 correlationId=694 clientId=console-consumer bodySize=26
+<- response node=2000 api=Fetch apiKey=1 apiVersion=17 correlationId=694 clientId=console-consumer bodySize=13
 ```
 
 You can further increase the verbosity by using an extra verbose mode `-vv`.
-This will in addition dump the content of the request and response bodies.
-However, at this point, only the ApiVersions, Metadata, and FindCoordinator requests and responses are supported 🫣. 
+This will in addition dump the decoded content of the request and response bodies for every Kafka API.
+
+When the full RPC stream is too noisy, you can narrow it down:
+
+* `--log-api Metadata,Produce` logs only the listed APIs (at `-v`).
+* `--trace-api Metadata` keeps the one-line summaries for everything but only decodes and dumps the
+  bodies of the listed APIs (at `-vv`), so you pay the decoding cost only for the APIs you care about.
 
 ## Frequently Asked Questions
 

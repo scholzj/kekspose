@@ -31,7 +31,8 @@ import (
 	"syscall"
 
 	keks2 "github.com/scholzj/kekspose/pkg/kekspose/keks"
-	"github.com/scholzj/kekspose/pkg/kekspose/proksy"
+	"github.com/scholzj/proksy"
+	"github.com/scholzj/proksy/filter"
 	strimzi "github.com/scholzj/strimzi-go/pkg/client/clientset/versioned"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -48,6 +49,11 @@ type Kekspose struct {
 	StartingPort     uint32
 	AllowUnready     bool
 	AllowInsecureTLS bool
+	// LogAPIKeys restricts RPC logging to these Kafka API keys. Empty means log every API.
+	LogAPIKeys []int16
+	// BodyAPIKeys restricts decoding+logging of full message bodies to these Kafka API keys. Empty
+	// means decode bodies for every logged API (the default behaviour).
+	BodyAPIKeys []int16
 }
 
 func (k *Kekspose) ExposeKafka() error {
@@ -100,7 +106,7 @@ func (k *Kekspose) ExposeKafka() error {
 	stopPortForwarders := func() {
 		stopOnce.Do(func() {
 			for _, pf := range portForwarders {
-				id := pf.Proxy.NodeId
+				id := pf.NodeId
 				slog.Info("Stopping port forwarding between localhost and Kubernetes", "localPort", portMapping[id], "podName", keks.Nodes[id], "remotePort", keks.Port, "namespace", k.Namespace)
 				close(pf.Stop)
 			}
@@ -109,7 +115,7 @@ func (k *Kekspose) ExposeKafka() error {
 
 	// Start forwarders
 	for _, pf := range portForwarders {
-		id := pf.Proxy.NodeId
+		id := pf.NodeId
 		slog.Info("Starting port forwarding between localhost and Kubernetes", "localPort", portMapping[id], "podName", keks.Nodes[id], "remotePort", keks.Port, "namespace", k.Namespace)
 
 		go func(pf *PortForwarder) {
@@ -231,11 +237,39 @@ func (k *Kekspose) preparePortForwarders(kubeconfig *rest.Config, kubeclient *ku
 
 	for _, nodeId := range sortedNodeIDs(keks.Nodes) {
 		node := keks.Nodes[nodeId]
-		portForwarder := NewPortForwarder(kubeconfig, kubeclient, k.Namespace, node, portMapping[nodeId], keks.Port, keks.TLS, proksy.NewProksy(nodeId, portMapping))
+		portForwarder := NewPortForwarder(kubeconfig, kubeclient, k.Namespace, node, nodeId, portMapping[nodeId], keks.Port, keks.TLS, k.newProxyEngine(nodeId, portMapping))
 		portForwarders = append(portForwarders, portForwarder)
 	}
 
 	return portForwarders
+}
+
+// newProxyEngine builds the proksy engine used to proxy one broker connection. Every broker shares
+// the same behaviour - log each RPC, and rewrite advertised broker addresses to localhost plus the
+// forwarded port for that node - so the engine is configured identically per node, differing only in
+// a node-scoped logger that tags log lines with the broker's node ID.
+func (k *Kekspose) newProxyEngine(nodeId int32, portMapping map[int32]uint32) *proksy.Engine {
+	resolve := func(id int32) (host string, port int32, ok bool) {
+		mapped, found := portMapping[id]
+		return "localhost", int32(mapped), found
+	}
+
+	debugOpts := make([]filter.DebugLogOption, 0, 2)
+	if len(k.LogAPIKeys) > 0 {
+		debugOpts = append(debugOpts, filter.WithAPIKeys(k.LogAPIKeys...))
+	}
+	if len(k.BodyAPIKeys) > 0 {
+		// Decode bodies only for the selected APIs (still shown at -vv).
+		debugOpts = append(debugOpts, filter.WithBodyAPIKeys(k.BodyAPIKeys...))
+	} else {
+		// Default: decode bodies for every logged API (shown at -vv).
+		debugOpts = append(debugOpts, filter.WithBody(filter.TraceLevel))
+	}
+
+	return proksy.NewEngine(
+		filter.DebugLog(debugOpts...),
+		filter.HostRewrite(resolve),
+	).WithLogger(slog.Default().With("node", nodeId))
 }
 
 func (k *Kekspose) bootstrapAddress(portMapping map[int32]uint32) string {
